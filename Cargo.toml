@@ -1,0 +1,45 @@
+[package]
+name = "formalnotes"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[dependencies]
+nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', features = ["settings-ui"] }
+flume = "0.12"
+jiff = "0.2"
+notify = "8.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', features = ["test", "audit"] }
+tempfile = "3"
+
+[build-dependencies]
+nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', default-features = false, features = ["build"] }
+
+# The appearance audit owns the main thread (AppKit), so libtest's harness is off.
+[[test]]
+name = "appearance"
+harness = false
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "deny"
+
+[workspace]
+
+# nd's GPUI patch queue.
+[patch.crates-io]
+gpui-pre = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre' }
+gpui-fast = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast' }
+gpui-pre-linux = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-linux' }
+gpui-fast-linux = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast-linux' }
+gpui-pre-wgpu = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-wgpu' }
+gpui-fast-wgpu = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast-wgpu' }
+gpui-pre-windows = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-windows' }
+

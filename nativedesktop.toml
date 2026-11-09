@@ -1,0 +1,9 @@
+[app]
+id = "dev.formalsnake.formalnotes"
+display_name = "Formal Notes"
+
+# Updates: `nd release keygen` prints public_key; the feed is any static host serving the
+# directory `nd release` writes (`nd release serve` for local tests).
+# [updates]
+# feed = "https://updates.example.com/formalnotes"
+# public_key = "..."

@@ -1,0 +1,142 @@
+//! Settings: `config.toml` in the app's config folder, edited by the settings sheet.
+
+use std::path::PathBuf;
+
+use nd::prelude::*;
+use serde::{Deserialize, Serialize};
+
+use crate::library::Sort;
+
+#[derive(Settings, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+#[serde(default, deny_unknown_fields)]
+pub struct NotesSettings {
+    /// The folder your notes live in. Empty means "Formal Notes" in your Documents folder.
+    pub library_root: String,
+    /// How wide the editor's text column grows.
+    pub editor_width: EditorWidth,
+    /// Light, dark, or whatever the system uses.
+    pub theme: ThemeChoice,
+    /// How Home and folder pages order their cards.
+    pub sort: SortOrder,
+}
+
+impl Default for NotesSettings {
+    fn default() -> Self {
+        Self {
+            library_root: String::new(),
+            editor_width: EditorWidth::Standard,
+            theme: ThemeChoice::System,
+            sort: SortOrder::Modified,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+#[serde(rename_all = "kebab-case")]
+pub enum EditorWidth {
+    /// 820 points.
+    Standard,
+    /// 1020 points.
+    Wide,
+    /// The whole pane, less its margins.
+    Full,
+}
+
+impl EditorWidth {
+    /// The column's widest, in points; `None` fills the pane.
+    pub fn max(self) -> Option<f32> {
+        match self {
+            EditorWidth::Standard => Some(820.),
+            EditorWidth::Wide => Some(1020.),
+            EditorWidth::Full => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeChoice {
+    System,
+    Light,
+    Dark,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+#[serde(rename_all = "kebab-case")]
+pub enum SortOrder {
+    /// Last edited first.
+    Modified,
+    /// Newest first.
+    Created,
+    /// A to Z.
+    Title,
+}
+
+impl From<SortOrder> for Sort {
+    fn from(order: SortOrder) -> Self {
+        match order {
+            SortOrder::Modified => Sort::Modified,
+            SortOrder::Created => Sort::Created,
+            SortOrder::Title => Sort::Title,
+        }
+    }
+}
+
+impl SortOrder {
+    pub const ALL: [SortOrder; 3] = [SortOrder::Modified, SortOrder::Created, SortOrder::Title];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SortOrder::Modified => "Date Modified",
+            SortOrder::Created => "Date Created",
+            SortOrder::Title => "Title",
+        }
+    }
+}
+
+impl NotesSettings {
+    /// The library folder this setting names, or the default.
+    pub fn root(&self) -> PathBuf {
+        let set = self.library_root.trim();
+        if set.is_empty() {
+            return default_root();
+        }
+        match set.strip_prefix("~/") {
+            Some(rest) => home().join(rest),
+            None => PathBuf::from(set),
+        }
+    }
+}
+
+fn home() -> PathBuf {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+}
+
+pub fn default_root() -> PathBuf {
+    home().join("Documents").join("Formal Notes")
+}
+
+/// Writes one setting through the loaded handle, as the settings sheet would. Without one (a
+/// test that provided none) nothing is written.
+pub fn set<V: Serialize>(cx: &mut App, key: &str, value: &V) {
+    if let Some(source) = cx.try_global::<nd::components::forms::settings::SettingsSource<NotesSettings>>() {
+        let _ = source.0.set(key, value);
+        cx.refresh_windows();
+    }
+}
+
+pub struct SettingsSheet;
+
+impl Render for SettingsSheet {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sheet_layout("Settings").w(px(480.)).child(settings_form::<NotesSettings>()).footer(
+            button("done", "Done")
+                .primary()
+                .on_click(cx.listener(|_, _: &ClickEvent, window, cx| window.close_sheet(cx))),
+        )
+    }
+}
