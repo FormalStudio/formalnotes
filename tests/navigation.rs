@@ -170,6 +170,7 @@ fn the_note_opens_in_a_markdown_editor_on_the_text_column() {
     let props: TextAreaProps =
         rig.cx.backend().props(body).and_then(|p| p.downcast_ref::<TextAreaProps>()).cloned().expect("a text area");
     assert!(props.styles.is_some(), "styled as markdown");
+    assert!(props.borderless, "the body is the page, without a field's chrome");
     assert_eq!(props.max_measure, Some(MEASURE), "the standard column at 1280 wide");
     assert!(props.text.contains("- [ ] Pick up the film scans"), "the body, syntax and all: {}", props.text);
     assert!(!props.text.starts_with("# "), "the title heading is not in the body");
@@ -213,4 +214,18 @@ fn a_closing_note_keeps_its_path_and_title_while_it_fades() {
     let tree = rig.cx.semantic_window(id).expect("the window").root;
     let crumb = tree.iter().any(|n| n.test_id.as_deref() == Some("note-crumb:folder:Journal"));
     assert!(crumb, "the page fades out with its path");
+}
+
+#[nd::test]
+fn a_card_dips_while_it_is_pressed() {
+    use nd::test::DivProps;
+
+    let mut rig = open();
+    let id = rig.id();
+    for key in ["face:note:Ideas.md", "face:folder:Projects"] {
+        let face = by_test_id(&mut rig.cx, id, key).unwrap_or_else(|| panic!("no `{key}`")).id;
+        let props: DivProps =
+            rig.cx.backend().props(face).and_then(|p| p.downcast_ref::<DivProps>()).cloned().expect("a div");
+        assert_eq!(props.active.and_then(|p| p.scale), Some(0.98), "{key} dips to 98%");
+    }
 }

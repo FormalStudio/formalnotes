@@ -128,12 +128,17 @@ impl super::root::FormalNotes {
                     .item("Reveal in Finder", RevealEntry(id.to_string()))
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(id.to_string())),
-                Some(EntryId::Note(_)) => menu
-                    .item("Rename…", RenameEntry(id.to_string()))
-                    .item("Reveal in Finder", RevealEntry(id.to_string()))
-                    .item("Move to Home", MoveEntry(id.to_string(), String::new()))
-                    .separator()
-                    .item_destructive("Move to Trash", TrashEntry(id.to_string())),
+                Some(EntryId::Note(n)) => {
+                    let menu = menu
+                        .item("Rename…", RenameEntry(id.to_string()))
+                        .item("Reveal in Finder", RevealEntry(id.to_string()));
+                    let menu = if n.folder().is_root() {
+                        menu
+                    } else {
+                        menu.item("Move to Home", MoveEntry(id.to_string(), String::new()))
+                    };
+                    menu.separator().item_destructive("Move to Trash", TrashEntry(id.to_string()))
+                }
                 _ => menu.item("New Note", NewNoteIn(id.to_string())).item("New Folder", NewFolderIn(id.to_string())),
             });
         let trash = source_list("sidebar-trash")

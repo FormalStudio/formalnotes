@@ -33,11 +33,10 @@ pub struct FormalNotes {
     pub(super) expanded: HashSet<FolderId>,
     /// The card under the pointer, which lifts.
     pub(super) hovered: Option<SharedString>,
-    /// The content region's size: the presented note grows to it.
+    /// The content region's size: the presented note grows to it, and the card grid takes its
+    /// columns from its width.
     pub(super) region: Option<(f32, f32)>,
     pub(super) sidebar_width: f32,
-    /// The card grid's measured width, which sets its columns.
-    pub(super) grid_width: Option<f32>,
     palette: Option<Mode>,
     palette_query: SharedString,
     notices: Notices,
@@ -82,7 +81,6 @@ impl FormalNotes {
             hovered: None,
             region: None,
             sidebar_width: super::metrics::SIDEBAR_WIDTH,
-            grid_width: None,
             palette: None,
             palette_query: SharedString::default(),
             notices: Notices::default(),

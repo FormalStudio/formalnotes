@@ -199,10 +199,10 @@ impl Render for Editor {
         let theme = cx.theme();
         let column = self.column(cx);
         let title = self.shown.as_ref().and_then(|id| self.store.read(cx).note(id)).map(|n| n.title.clone());
-        // Everything sits in the text column. AppKit draws a text area with a border until it
-        // has a borderless style; then the body can run the pane's full width, scrolling at its
-        // edge, and keep its text to the column with `max_measure` alone.
-        let in_column = |e: AnyElement| h_flex().flex_none().w_full().justify_center().child(div().w(px(column)).child(e));
+        // The title and the word count sit in the text column. The body runs the pane's full
+        // width, scrolling at its edge, and `max_measure` keeps its text to the same column.
+        let in_column =
+            |e: AnyElement| h_flex().flex_none().w_full().justify_center().child(div().w(px(column)).child(e));
         let heading: AnyElement = if self.editing_title {
             text_field(TITLE_FIELD)
                 .bind(&self.title)
@@ -249,8 +249,7 @@ impl Render for Editor {
             .pt(px(EDITOR_TOP))
             .on_resize(move |e, _, cx| {
                 let _ = this.update(cx, |this, cx| {
-                    // The window's first layout reports no width; the column keeps its widest.
-                    if e.width >= 1. && this.pane != Some(e.width) {
+                    if this.pane != Some(e.width) {
                         this.pane = Some(e.width);
                         cx.notify();
                     }
@@ -259,14 +258,13 @@ impl Render for Editor {
             .child(in_column(heading))
             .child(
                 markdown_editor(BODY, &self.body)
+                    .borderless()
                     .max_measure(column)
                     .label("Note")
-                    .w(px(column))
-                    .mx_auto()
+                    .w_full()
                     .flex_1()
                     .min_h_0()
-                    .mt(theme.spacing.sm)
-                    .rounded(px(0.)),
+                    .mt(theme.spacing.sm),
             )
             .child(in_column(words))
     }

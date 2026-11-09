@@ -6,6 +6,7 @@ use nd::prelude::*;
 use super::cards::{self, FolderFace, GROUP, NoteFace};
 use super::format;
 use super::metrics::*;
+use super::motion;
 use super::root::FormalNotes;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
@@ -105,9 +106,11 @@ impl FormalNotes {
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
-                .child(
-                    div().px(px(PAGE_PAD_X)).pt(px(PAGE_PAD_TOP)).pb(px(PAGE_PAD_X)).child(self.grid(tiles, gap, cx)),
-                )
+                .child(div().px(px(PAGE_PAD_X)).pt(px(PAGE_PAD_TOP)).pb(px(PAGE_PAD_X)).child(self.grid(
+                    format!("cards:{}", folder_key(folder)),
+                    tiles,
+                    gap,
+                )))
                 .into_any_element()
         };
         let _ = theme;
@@ -122,6 +125,8 @@ impl FormalNotes {
             .id(format!("face:{}", entry_key(&entry)))
             .group(GROUP)
             .size_full()
+            .active(|p| p.scale(0.98))
+            .animate(motion::press())
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 let was = this.hovered.clone();
                 if *hovered {
@@ -236,13 +241,11 @@ impl FormalNotes {
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
-                .child(
-                    div()
-                        .px(px(PAGE_PAD_X))
-                        .pt(px(PAGE_PAD_TOP))
-                        .pb(px(PAGE_PAD_X))
-                        .child(self.grid(tiles, CARD_GAP, cx)),
-                )
+                .child(div().px(px(PAGE_PAD_X)).pt(px(PAGE_PAD_TOP)).pb(px(PAGE_PAD_X)).child(self.grid(
+                    "cards:trash",
+                    tiles,
+                    CARD_GAP,
+                )))
                 .into_any_element()
         };
         v_flex().id("page").size_full().child(header).child(body).into_any_element()

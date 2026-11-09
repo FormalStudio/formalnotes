@@ -6,6 +6,7 @@ pub mod library;
 pub mod nav;
 mod pump;
 pub mod settings;
+mod theme;
 pub mod views;
 
 use std::path::PathBuf;

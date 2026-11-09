@@ -36,14 +36,15 @@ pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
         .overflow_hidden()
         .p(px(CARD_PADDING))
         .gap(px(2.))
-        // AppKit labels wrap whatever the text style says, so two lines are kept by clipping.
         .child(
-            div().flex_none().max_h(px(TITLE_PREVIEW_LINE * 2.)).overflow_hidden().mb(px(6.)).child(
+            div().flex_none().mb(px(6.)).child(
                 text(face.title.to_owned())
                     .text_size(theme.type_scale.body)
                     .line_height(px(TITLE_PREVIEW_LINE))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(theme.text.primary),
+                    .text_color(theme.text.primary)
+                    .line_clamp(2)
+                    .text_ellipsis(),
             ),
         )
         .children(lines.into_iter().map(|line| preview_line(theme, line)))
@@ -69,6 +70,7 @@ pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
                 .rounded(px(CARD_RADIUS))
                 .bg(theme.border.subtle)
                 .group_hover(GROUP, |s| s.bg(theme.border.strong))
+                .shadow(crate::theme::card_shadow(theme, face.hovered))
                 .offset(px(0.), px(lift))
                 .animate(motion::hover(face.hovered))
                 .child(page),
@@ -85,23 +87,14 @@ fn caption(theme: &Theme, label: String) -> Div {
         .child(text(label).text_size(theme.type_scale.caption).text_color(theme.text.secondary).truncate())
 }
 
-/// One line of a miniature page. AppKit labels wrap regardless of `truncate`, so each line sits
-/// in a box one line high that clips the rest.
+/// One line of a miniature page, cut with an ellipsis. Its box sets the line pitch, which AppKit
+/// labels do not take from `line_height`.
 fn preview_line(theme: &Theme, line: PreviewLine) -> AnyElement {
-    // The box is one natural line of the font tall (AppKit ignores `line_height`), and the margin
-    // makes up the rest of the line pitch.
-    let (size, pitch) = match line {
-        PreviewLine::Heading(_) => (PREVIEW_HEADING, PREVIEW_LINE + 2.),
-        _ => (PREVIEW_TEXT, PREVIEW_LINE),
+    let pitch = match line {
+        PreviewLine::Heading(_) => PREVIEW_LINE + 2.,
+        _ => PREVIEW_LINE,
     };
-    let height = (size * 1.25).ceil();
-    div()
-        .flex_none()
-        .h(px(height))
-        .mb(px(pitch - height))
-        .overflow_hidden()
-        .child(preview_text(theme, line))
-        .into_any_element()
+    div().flex_none().h(px(pitch)).child(preview_text(theme, line)).into_any_element()
 }
 
 fn preview_text(theme: &Theme, line: PreviewLine) -> AnyElement {
@@ -182,16 +175,16 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
     div()
         .size_full()
         .relative()
-        // The back plate and its tab, opaque: they overlap, and AppKit rounds every corner of
-        // a view alike, so the tab cannot be a separate square-cornered piece.
+        // The back plate and its tab, edge to edge: the plate's top-left corner is square
+        // under the tab.
         .child(
             div()
                 .absolute()
                 .top_0()
                 .left_0()
                 .w(relative(FOLDER_TAB_WIDTH))
-                .h(relative(0.2))
-                .rounded(px(PAPER_RADIUS))
+                .h(relative(FOLDER_TAB_RISE))
+                .rounded_t(px(PAPER_RADIUS))
                 .bg(theme.surface.raised_hover),
         )
         .child(
@@ -202,6 +195,7 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
                 .right_0()
                 .bottom_0()
                 .rounded(px(FOLDER_RADIUS))
+                .rounded_tl(px(0.))
                 .bg(theme.surface.raised_hover),
         )
         .children((0..papers).rev().map(paper))

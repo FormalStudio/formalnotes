@@ -19,6 +19,12 @@ pub fn folder_open() -> Animation {
     Animation::spring_physics(260., 21.)
 }
 
+/// A card dipping while a press on it is held, and coming back: the folder press spring,
+/// 520 / 15, a little bouncy.
+pub fn press() -> Animation {
+    Animation::spring_physics(520., 15.)
+}
+
 /// The papers in a folder card, each a little softer so they fan out one after another.
 pub fn paper(i: usize) -> Animation {
     match i {
@@ -26,12 +32,6 @@ pub fn paper(i: usize) -> Animation {
         1 => Animation::spring_physics(230., 18.),
         _ => Animation::spring_physics(170., 15.5),
     }
-}
-
-/// Where a card that leaves the grid (trashed, moved, put back) goes: it fades and shrinks a
-/// little where it stood while the others close the gap.
-pub fn card_exit(p: Pose) -> Pose {
-    p.opacity(0.).scale(0.96)
 }
 
 /// How far a card rises on hover.
