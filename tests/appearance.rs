@@ -11,5 +11,9 @@ fn main() {
             store.update(cx, |store, cx| store.settle(cx));
             window.id()
         })
+        .window("settings", |cx| match formalnotes::settings::open_window(cx) {
+            Some(window) => window.id(),
+            None => panic!("a settings window was already open"),
+        })
         .run()
 }

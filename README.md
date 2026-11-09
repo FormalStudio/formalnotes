@@ -40,13 +40,13 @@ tier 1 tests (`tests/store.rs`, `tests/navigation.rs`) and the audit.
 |---|---|
 | `Cmd+N` / `Shift+Cmd+N` | new note / new folder in the current folder |
 | `Cmd+K` | command palette |
-| `Cmd+J`, `Cmd+F` | search notes |
+| `Cmd+J`, `Cmd+F` | search notes (in the editor `Cmd+F` finds in the note, `Cmd+G` the next match) |
 | `Cmd+1` | Home |
 | `Cmd+[` | back |
 | `Cmd+Backspace` | move the open note to the trash (outside the text, where it deletes to the line start) |
 | `Cmd+B`, `Cmd+I` | bold, italic in the editor |
 | `Tab`, `Shift+Tab` | nest or lift a list item in the editor |
 | `Cmd+\` | toggle the sidebar |
-| `Cmd+,` | settings: library folder, editor width, theme |
+| `Cmd+,` | the Settings window: library folder, editor width, theme |
 
 `Ctrl` in place of `Cmd` on Linux and Windows.

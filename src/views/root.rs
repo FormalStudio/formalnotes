@@ -14,7 +14,7 @@ use super::palette::{self, Command, Mode};
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, NoteId, Sort, Store};
 use crate::nav::{Location, card_id, parse_entry};
-use crate::settings::{NotesSettings, SettingsSheet, SortOrder, ThemeChoice};
+use crate::settings::{NotesSettings, SortOrder, ThemeChoice};
 
 const RENAME_FIELD: &str = "rename-field";
 
@@ -405,10 +405,6 @@ impl FormalNotes {
 
     // Palette.
 
-    pub(super) fn open_palette_search(&mut self, cx: &mut Context<Self>) {
-        self.open_palette(Mode::Search, cx);
-    }
-
     fn open_palette(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.palette = Some(mode);
         self.palette_query = SharedString::default();
@@ -429,12 +425,26 @@ impl FormalNotes {
                 }
             }
             Command::ToggleSidebar => cx.window_command(window.id(), nd::backend::WindowCommand::ToggleSidebar),
-            Command::Settings => self.open_settings(window, cx),
+            Command::Settings => self.open_settings(cx),
         }
     }
 
-    fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        window.open_sheet(cx, |_window, cx| cx.new(|_| SettingsSheet));
+    /// The Settings window, as a Mac app keeps its preferences: one window, brought forward
+    /// when it is already open.
+    fn open_settings(&mut self, cx: &mut Context<Self>) {
+        crate::settings::open_window(cx);
+    }
+
+    /// What the window is showing, for its title: the note, the folder, Home or the trash.
+    fn window_title(&self, cx: &App) -> String {
+        if let Some(note) = self.open.as_ref().and_then(|id| self.store.read(cx).note(id)) {
+            return note.title.clone();
+        }
+        match &self.location {
+            Location::Folder(folder) if folder.is_root() => "Home".to_owned(),
+            Location::Folder(folder) => folder.name().to_owned(),
+            Location::Trash => "Trash".to_owned(),
+        }
     }
 
     /// Every action the window answers, on the scaffold that holds them.
@@ -451,7 +461,7 @@ impl FormalNotes {
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.go(Location::Trash, cx)))
             .on_action(cx.listener(|this, _: &EmptyTrash, window, cx| this.empty_trash(window, cx)))
             .on_action(cx.listener(|this, _: &MoveToTrash, window, cx| this.run(Command::MoveToTrash, window, cx)))
-            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.open_settings(cx)))
             .on_action(cx.listener(|_, _: &ReportIssue, _, _| report_issue()))
             .on_action(cx.listener(move |this, a: &OpenEntry, window, cx| {
                 if let Some(e) = entry(&a.0) {
@@ -605,13 +615,18 @@ impl Render for FormalNotes {
             .child(presentation("note", &self.presented).base(page).content(note))
             .child(toasts)
             .children(rename);
+        // The page and the note carry their own headings, so the toolbar shows no title; the
+        // window still takes one for the Window menu, Mission Control and VoiceOver.
         let scaffold = scaffold()
             .toolbar(
                 toolbar()
+                    .title(self.window_title(cx))
+                    .hide_title()
                     .sidebar_toggle()
                     .flexible_space()
-                    .item(icon_button("new-folder", Icon::Folder).tooltip("New Folder").dispatch(NewFolder))
-                    .item(icon_button("new-note", Icon::SquarePen).tooltip("New Note").dispatch(NewNote)),
+                    .item(icon_button("new-folder", Icon::FolderPlus).tooltip("New Folder").dispatch(NewFolder))
+                    .item(icon_button("new-note", Icon::SquarePen).tooltip("New Note").dispatch(NewNote))
+                    .item(icon_button("search", Icon::Search).tooltip("Search Notes").dispatch(Search)),
             )
             .sidebar(
                 nd::components::sidebar()

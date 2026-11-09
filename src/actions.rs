@@ -85,7 +85,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-shift-n", NewFolder, Some(CONTEXT)),
         KeyBinding::new("secondary-k", OpenPalette, Some(CONTEXT)),
         KeyBinding::new("secondary-j", Search, Some(CONTEXT)),
-        KeyBinding::new("secondary-f", Search, Some(CONTEXT)),
+        // In the editor Command-F is Edit > Find, the find bar over the note, as in Notes.
+        KeyBinding::new("secondary-f", Search, Some("FormalNotes && !NoteEditor")),
         KeyBinding::new("secondary-1", GoHome, Some(CONTEXT)),
         KeyBinding::new("secondary-[", GoBack, Some(CONTEXT)),
         // Not while typing: there Command-Delete deletes to the start of the line.
@@ -95,7 +96,8 @@ pub fn init(cx: &mut App) {
     ]);
 
     // Move to Trash stays out of the menu bar: a menu key equivalent would take Command-Delete
-    // from the editor too.
+    // from the editor too. AppKit adds the Edit menu (with Find) and the Window menu, and Close
+    // at the end of File.
     set_menus(
         cx,
         [
@@ -111,9 +113,11 @@ pub fn init(cx: &mut App) {
                 MenuItem::action("Back", GoBack),
                 MenuItem::action("Search Notes", Search),
                 MenuItem::action("Command Palette", OpenPalette),
+                MenuItem::action("Trash", OpenTrash),
                 MenuItem::separator(),
                 MenuItem::role(MenuRole::ToggleSidebar),
             ]),
+            Menu::new("Format").items([MenuItem::role(MenuRole::Bold), MenuItem::role(MenuRole::Italic)]),
             Menu::help([MenuItem::action("Report an Issue…", ReportIssue)]),
         ],
     );

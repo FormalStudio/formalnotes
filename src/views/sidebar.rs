@@ -56,16 +56,12 @@ pub fn trash_node(count: usize) -> SourceNode {
 }
 
 impl super::root::FormalNotes {
-    /// The search pill, the library tree, and the trash at the foot.
+    /// The library tree, and the trash at the foot.
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
-        use super::metrics::{PILL_HEIGHT, PILL_RADIUS};
-        use crate::actions::{
-            MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, Search, TrashEntry, reveal_label, shortcut,
-        };
+        use crate::actions::{MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, TrashEntry, reveal_label};
         use crate::library::EntryId;
         use crate::nav::{ENTRY_DRAG, Location, parse_entry};
 
-        let theme = cx.theme().clone();
         let library = self.store.read(cx).library();
         let selected: SharedString = match (self.switching.as_ref().or(self.open.as_ref()), &self.location) {
             (Some(note), _) => note_key(note),
@@ -147,24 +143,6 @@ impl super::root::FormalNotes {
             .flex_none()
             .h(px(36.))
             .on_select(cx.listener(|this, _: &SourceSelected, _, cx| this.go(Location::Trash, cx)));
-        let hint = shortcut(&Search).unwrap_or_default();
-        let search = h_flex()
-            .id("search")
-            .mx(px(14.))
-            .mb(theme.spacing.sm)
-            .h(px(PILL_HEIGHT))
-            .px(px(10.))
-            .gap(px(8.))
-            .items_center()
-            .rounded(px(PILL_RADIUS))
-            .bg(theme.surface.raised)
-            .border_1()
-            .border_color(theme.border.subtle)
-            .hover(|s| s.bg(theme.surface.raised_hover))
-            .on_tap(cx.listener(|this, _: &TapEvent, _, cx| this.open_palette_search(cx)))
-            .child(icon(Icon::Search, 14.).text_color(theme.text.secondary))
-            .child(text("Search").flex_1().text_color(theme.text.secondary))
-            .child(text(hint).text_size(theme.type_scale.caption).text_color(theme.text.secondary));
-        v_flex().size_full().child(search).child(tree).child(trash).into_any_element()
+        v_flex().size_full().child(tree).child(trash).into_any_element()
     }
 }

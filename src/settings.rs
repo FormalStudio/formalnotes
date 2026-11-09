@@ -136,16 +136,19 @@ pub fn set<V: Serialize>(cx: &mut App, key: &str, value: &V) {
     }
 }
 
-pub struct SettingsSheet;
+/// The Settings window: the settings form, applied as it changes, as Mac settings windows are.
+pub struct SettingsWindow;
 
-impl Render for SettingsSheet {
+impl Render for SettingsWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        sheet_layout("Settings").w(px(480.)).child(settings_form::<NotesSettings>()).footer(
-            button("done", "Done")
-                .primary()
-                .on_click(cx.listener(|_, _: &ClickEvent, window, cx| window.close_sheet(cx))),
-        )
+        let theme = cx.theme();
+        div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
     }
+}
+
+/// Opens the Settings window, or brings the open one forward.
+pub fn open_window(cx: &mut App) -> Option<WindowHandle<SettingsWindow>> {
+    open_settings(cx, |_, cx| cx.new(|_| SettingsWindow))
 }
 
 #[cfg(test)]
