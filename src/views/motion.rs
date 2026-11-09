@@ -1,49 +1,38 @@
 //! The design's motion, as nd animations. Its springs are given as stiffness `k` and damping `c`
-//! on a unit mass; nd takes Apple's response (the period, `2π/√k`) and damping ratio
-//! (`c / 2√k`).
-
-use std::f64::consts::TAU;
-use std::time::Duration;
+//! on a unit mass, which `Animation::spring_physics` takes as they stand.
 
 use nd::prelude::*;
 
-pub fn spring(k: f64, c: f64) -> Animation {
-    let omega = k.sqrt();
-    Animation::spring(TAU / omega, c / (2. * omega))
+/// Layout moves: a card gliding to its new place on reflow, insert or remove, and going out.
+/// 420 / 31, settles in about a quarter second.
+pub fn layout() -> Animation {
+    Animation::spring_physics(420., 31.)
 }
 
-/// Layout moves and the hover lift: 420 / 31, settles in about a quarter second.
-pub fn layout() -> Animation {
-    spring(420., 31.)
+/// The hover lift: fast in (1100 / 66), slow out (300 / 35).
+pub fn hover(hovered: bool) -> Animation {
+    if hovered { Animation::spring_physics(1100., 66.) } else { Animation::spring_physics(300., 35.) }
 }
 
 /// A folder card opening its mouth on hover: 260 / 21.
 pub fn folder_open() -> Animation {
-    spring(260., 21.)
+    Animation::spring_physics(260., 21.)
 }
 
 /// The papers in a folder card, each a little softer so they fan out one after another.
 pub fn paper(i: usize) -> Animation {
     match i {
-        0 => spring(320., 21.),
-        1 => spring(230., 18.),
-        _ => spring(170., 15.5),
+        0 => Animation::spring_physics(320., 21.),
+        1 => Animation::spring_physics(230., 18.),
+        _ => Animation::spring_physics(170., 15.5),
     }
 }
 
-/// Cards coming in the first time a page shows: short fades, staggered, all done well within a
-/// quarter second.
-pub fn card_enter(index: usize, reduce: bool) -> Animation {
-    const STEP: Duration = Duration::from_millis(15);
-    const MAX_DELAY: Duration = Duration::from_millis(90);
-    const FADE: Duration = Duration::from_millis(150);
-    if reduce {
-        return Animation::ease_out(FADE);
-    }
-    let delay = (STEP * index as u32).min(MAX_DELAY);
-    Animation::Delayed { delay, duration: FADE, curve: Curve::EaseOut }
+/// Where a card that leaves the grid (trashed, moved, put back) goes: it fades and shrinks a
+/// little where it stood while the others close the gap.
+pub fn card_exit(p: Pose) -> Pose {
+    p.opacity(0.).scale(0.96)
 }
 
-/// How far a card rises on hover, and comes up from on enter.
+/// How far a card rises on hover.
 pub const LIFT: f32 = 3.;
-pub const ENTER_RISE: f32 = 6.;

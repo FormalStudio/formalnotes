@@ -13,13 +13,11 @@ pub const PAGE_PAD_X: f32 = 24.;
 pub const PAGE_PAD_TOP: f32 = 14.;
 pub const HEADER_HEIGHT: f32 = 48.;
 
-/// Cards: at least this wide, this tall for their width, this far apart (more when a level
-/// holds folders, whose tabs need the room).
-pub const CARD_MIN_WIDTH: f32 = 240.;
+/// Cards: this tall for their width, this far apart (more when a level holds folders, whose
+/// tabs need the room).
 pub const CARD_ASPECT: f32 = 264. / 236.;
 pub const CARD_GAP: f32 = 16.;
 pub const CARD_GAP_FOLDERS: f32 = 24.;
-pub const CARD_MAX_COLUMNS: usize = 8;
 pub const CARD_FRAME: f32 = 4.;
 pub const CARD_RADIUS: f32 = 20.;
 pub const PAGE_RADIUS: f32 = 16.;
@@ -52,3 +50,28 @@ pub const EDITOR_TOP: f32 = 24.;
 /// Sidebar search pill.
 pub const PILL_HEIGHT: f32 = 30.;
 pub const PILL_RADIUS: f32 = 9.;
+
+/// How many cards a row of `avail` points holds with `gap` between them: four or more once
+/// four 200-point cards fit (each then at least 240), otherwise one to three of at least 160.
+pub fn card_columns(avail: f32, gap: f32) -> usize {
+    let fit = |w: f32| ((avail + gap) / (w + gap)).floor().max(0.) as usize;
+    if fit(200.) >= 4 { fit(240.).max(4) } else { fit(160.).clamp(1, 3) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn columns_follow_the_design_rule() {
+        // Home at 1280 x 800 with a 280 sidebar: 952 points, folders on the level.
+        assert_eq!(card_columns(952., CARD_GAP_FOLDERS), 4);
+        assert_eq!(card_columns(952., CARD_GAP), 4);
+        // Wide: four or more, each at least 240.
+        assert_eq!(card_columns(1800., CARD_GAP), 7);
+        // Narrow: one to three, each at least 160.
+        assert_eq!(card_columns(532., CARD_GAP_FOLDERS), 3);
+        assert_eq!(card_columns(400., CARD_GAP), 2);
+        assert_eq!(card_columns(100., CARD_GAP), 1);
+    }
+}

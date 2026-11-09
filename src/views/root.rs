@@ -24,6 +24,9 @@ pub struct FormalNotes {
     pub(super) location: Location,
     /// The note presented over the page.
     pub(super) open: Option<NoteId>,
+    /// The note the presented page shows: kept through the close, so the page fades out as it
+    /// was instead of losing its path first.
+    pub(super) shown: Option<NoteId>,
     pub(super) presented: Presentation,
     /// The card the presented note grows from and closes back onto; kept through the close.
     pub(super) hero: SharedString,
@@ -58,6 +61,7 @@ impl FormalNotes {
                     let _ = this.update(cx, |root, cx| {
                         root.hero = crate::nav::card_id(&EntryId::Note(moved.clone()));
                         root.open = Some(moved.clone());
+                        root.shown = Some(moved.clone());
                         cx.notify();
                     });
                 },
@@ -71,6 +75,7 @@ impl FormalNotes {
             editor,
             location: Location::home(),
             open: None,
+            shown: None,
             presented: Presentation::new(),
             hero: SharedString::default(),
             expanded: HashSet::new(),
@@ -179,6 +184,7 @@ impl FormalNotes {
         }
         self.editor.update(cx, |editor, cx| editor.open(id.clone(), window, cx));
         self.hero = card_id(&EntryId::Note(id.clone()));
+        self.shown = Some(id.clone());
         self.open = Some(id);
         self.presented.set_open(true);
         cx.notify();
@@ -278,6 +284,7 @@ impl FormalNotes {
             let moved = NoteId(path);
             self.hero = card_id(&EntryId::Note(moved.clone()));
             self.open = Some(moved.clone());
+            self.shown = Some(moved.clone());
             self.editor.update(cx, |editor, cx| editor.follow(moved, cx));
         }
         if let Location::Folder(folder) = &self.location

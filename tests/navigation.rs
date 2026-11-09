@@ -156,3 +156,61 @@ fn trash_shows_an_undo_toast_that_puts_it_back() {
     rig.settle();
     assert!(rig.view().store().read(&rig.cx).note(&note).is_some(), "undo puts the note back");
 }
+
+#[nd::test]
+fn the_note_opens_in_a_markdown_editor_on_the_text_column() {
+    use nd::components::TextAreaProps;
+    use nd::components::markdown::MEASURE;
+
+    let mut rig = open();
+    let note = NoteId("Weekend plans.md".into());
+    rig.act(&OpenEntry(format!("note:{}", note.0)));
+    let id = rig.id();
+    let body = by_test_id(&mut rig.cx, id, formalnotes::views::editor::BODY).expect("the body").id;
+    let props: TextAreaProps =
+        rig.cx.backend().props(body).and_then(|p| p.downcast_ref::<TextAreaProps>()).cloned().expect("a text area");
+    assert!(props.styles.is_some(), "styled as markdown");
+    assert_eq!(props.max_measure, Some(MEASURE), "the standard column at 1280 wide");
+    assert!(props.text.contains("- [ ] Pick up the film scans"), "the body, syntax and all: {}", props.text);
+    assert!(!props.text.starts_with("# "), "the title heading is not in the body");
+}
+
+#[nd::test]
+fn a_trashed_card_leaves_where_it_stood_and_comes_back_on_undo() {
+    let mut rig = open();
+    let note = NoteId("Ideas.md".into());
+    let key = format!("card:note:{}", note.0);
+    let id = rig.id();
+    let card = by_test_id(&mut rig.cx, id, &key).expect("the card").id;
+
+    assert!(rig.cx.dispatch_action(id, &formalnotes::actions::TrashEntry(format!("note:{}", note.0))));
+    rig.cx.frame();
+    assert!(rig.cx.backend().is_live(card), "held while it exits");
+    // Read without settling: the stopped clock would hold the exit forever.
+    let tree = rig.cx.semantic_window(id).expect("the window").root;
+    assert!(tree.iter().all(|n| n.test_id.as_deref() != Some(key.as_str())), "out of the accessibility tree");
+
+    idle(&mut rig.cx);
+    assert!(!rig.cx.backend().is_live(card), "gone once it has faded");
+
+    let toast = rig.view().toasts().last().expect("a toast").id.clone();
+    let overlay = by_test_id(&mut rig.cx, id, "toasts").expect("the toasts").id;
+    rig.emit(overlay, ToastActionClicked { id: toast });
+    rig.settle();
+    assert!(by_test_id(&mut rig.cx, id, &key).is_some(), "undo puts the card back");
+}
+
+#[nd::test]
+fn a_closing_note_keeps_its_path_and_title_while_it_fades() {
+    let mut rig = open();
+    let note = NoteId("Journal/Monday.md".into());
+    rig.act(&OpenEntry(format!("note:{}", note.0)));
+    let id = rig.id();
+    assert!(rig.cx.dispatch_action(id, &GoBack));
+    rig.cx.advance_clock(1. / 60.);
+    rig.cx.frame();
+    assert_eq!(rig.view().open_note(), None);
+    let tree = rig.cx.semantic_window(id).expect("the window").root;
+    let crumb = tree.iter().any(|n| n.test_id.as_deref() == Some("note-crumb:folder:Journal"));
+    assert!(crumb, "the page fades out with its path");
+}

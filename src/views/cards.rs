@@ -57,7 +57,7 @@ pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
                     .child(text("Blank note").text_size(theme.type_scale.caption).text_color(theme.text.secondary)),
             )
         });
-    let lift = if face.hovered { -super::motion::LIFT } else { 0. };
+    let lift = if face.hovered { -motion::LIFT } else { 0. };
     v_flex()
         .size_full()
         .when(face.beside_folders, |c| c.child(div().flex_none().h(relative(FOLDER_TAB_RISE))))
@@ -70,7 +70,7 @@ pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
                 .bg(theme.border.subtle)
                 .group_hover(GROUP, |s| s.bg(theme.border.strong))
                 .offset(px(0.), px(lift))
-                .animate(motion::layout())
+                .animate(motion::hover(face.hovered))
                 .child(page),
         )
         .child(caption(theme, face.caption))

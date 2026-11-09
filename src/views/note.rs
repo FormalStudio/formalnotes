@@ -43,8 +43,8 @@ impl FormalNotes {
     /// Back, then the note's path: Home, its folders, its title.
     fn note_header(&self, cx: &mut Context<Self>) -> Div {
         let theme = cx.theme().clone();
-        let folder = self.open.as_ref().map(|n| n.folder()).unwrap_or_default();
-        let title = self.open.as_ref().and_then(|id| self.store.read(cx).note(id)).map(|n| n.title.clone());
+        let folder = self.shown.as_ref().map(|n| n.folder()).unwrap_or_default();
+        let title = self.shown.as_ref().and_then(|id| self.store.read(cx).note(id)).map(|n| n.title.clone());
         let mut trail = vec![FolderId::root()];
         trail.extend(folder.ancestry());
         let mut crumbs = h_flex().gap(px(6.)).items_center().min_w_0();

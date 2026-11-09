@@ -6,7 +6,6 @@ use nd::prelude::*;
 use super::cards::{self, FolderFace, GROUP, NoteFace};
 use super::format;
 use super::metrics::*;
-use super::motion;
 use super::root::FormalNotes;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
@@ -24,7 +23,6 @@ impl FormalNotes {
     fn folder_page(&self, folder: &FolderId, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
         let sort = Self::sort(cx);
-        let reduce = cx.reduce_motion();
         let now = Timestamp::now();
         let library = self.store.read(cx).library().clone();
         let folders = library.subfolders(folder, sort);
@@ -53,7 +51,7 @@ impl FormalNotes {
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(menu_key.clone()))
             });
-            tiles.push(self.tile(entry, face, tiles.len(), reduce, cx));
+            tiles.push(self.tile(entry, face, cx));
         }
         for n in &notes {
             let entry = EntryId::Note(n.id.clone());
@@ -82,7 +80,7 @@ impl FormalNotes {
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(menu_key.clone()))
             });
-            tiles.push(self.tile(entry, face, tiles.len(), reduce, cx));
+            tiles.push(self.tile(entry, face, cx));
         }
 
         let count = folders.len() + notes.len();
@@ -116,16 +114,8 @@ impl FormalNotes {
         v_flex().id("page").size_full().child(header).child(body).into_any_element()
     }
 
-    /// A card in the grid: it fades up the first time the page shows, lifts under the pointer,
-    /// and opens on a click.
-    fn tile(
-        &self,
-        entry: EntryId,
-        face: Div,
-        index: usize,
-        reduce: bool,
-        cx: &mut Context<Self>,
-    ) -> (SharedString, AnyElement) {
+    /// A card in the grid: it lifts under the pointer and opens on a click.
+    fn tile(&self, entry: EntryId, face: Div, cx: &mut Context<Self>) -> (SharedString, AnyElement) {
         let id = card_id(&entry);
         let hover_id = id.clone();
         let face = face
@@ -144,13 +134,7 @@ impl FormalNotes {
                 }
             }))
             .on_tap(cx.listener(move |this, _: &TapEvent, window, cx| this.open_entry(&entry, window, cx)));
-        let content = div()
-            .size_full()
-            .opacity(1.)
-            .animate(motion::card_enter(index, reduce))
-            .enter_from(|p| p.opacity(0.).offset(px(0.), px(motion::ENTER_RISE)))
-            .child(face);
-        (id, content.into_any_element())
+        (id, face.into_any_element())
     }
 
     /// The page's title (a path of crumbs inside folders), its count, and the sort menu.
@@ -203,13 +187,11 @@ impl FormalNotes {
 
     fn trash_page(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
-        let reduce = cx.reduce_motion();
         let now = Timestamp::now();
         let items = self.store.read(cx).library().trash.clone();
         let tiles: Vec<(SharedString, AnyElement)> = items
             .iter()
-            .enumerate()
-            .map(|(i, item)| {
+            .map(|item| {
                 let caption = cards::trash_caption(&item.origin, item.trashed, now);
                 let face = match &item.kind {
                     crate::library::TrashKind::Note { text } => cards::note_card(
@@ -226,12 +208,7 @@ impl FormalNotes {
                     .id(format!("trashed:{}", item.name))
                     .size_full()
                     .context_menu(move |menu, _, _| menu.item("Put Back", RestoreTrashed(name.clone())));
-                let content = div()
-                    .size_full()
-                    .animate(motion::card_enter(i, reduce))
-                    .enter_from(|p| p.opacity(0.).offset(px(0.), px(motion::ENTER_RISE)))
-                    .child(face);
-                (SharedString::from(format!("trash:{}", item.name)), content.into_any_element())
+                (SharedString::from(format!("trash:{}", item.name)), face.into_any_element())
             })
             .collect();
         let header = h_flex()

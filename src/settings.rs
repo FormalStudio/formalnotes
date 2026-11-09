@@ -53,6 +53,13 @@ impl EditorWidth {
             EditorWidth::Full => None,
         }
     }
+
+    /// The text column's width in a pane `pane` points wide: at most [`Self::max`], and never
+    /// closer than `margin` to either side.
+    pub fn column(self, pane: f32, margin: f32) -> f32 {
+        let room = (pane - 2. * margin).max(1.);
+        self.max().map_or(room, |max| max.min(room))
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema)]
@@ -138,5 +145,19 @@ impl Render for SettingsSheet {
                 .primary()
                 .on_click(cx.listener(|_, _: &ClickEvent, window, cx| window.close_sheet(cx))),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EditorWidth;
+
+    #[test]
+    fn the_column_keeps_its_margins_and_its_width() {
+        assert_eq!(EditorWidth::Standard.column(1000., 66.), 820.);
+        assert_eq!(EditorWidth::Standard.column(800., 66.), 668.);
+        assert_eq!(EditorWidth::Wide.column(1200., 66.), 1020.);
+        assert_eq!(EditorWidth::Full.column(1200., 66.), 1068.);
+        assert_eq!(EditorWidth::Full.column(100., 66.), 1.);
     }
 }
