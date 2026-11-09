@@ -48,7 +48,7 @@ impl FormalNotes {
                     .item("New Note Here", NewNoteIn(menu_key.clone()))
                     .separator()
                     .item("Rename…", RenameEntry(menu_key.clone()))
-                    .item("Reveal in Finder", RevealEntry(menu_key.clone()))
+                    .item(reveal_label(), RevealEntry(menu_key.clone()))
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(menu_key.clone()))
             });
@@ -76,7 +76,7 @@ impl FormalNotes {
                 );
                 menu.item("Open", OpenEntry(menu_key.clone()))
                     .item("Rename…", RenameEntry(menu_key.clone()))
-                    .item("Reveal in Finder", RevealEntry(menu_key.clone()))
+                    .item(reveal_label(), RevealEntry(menu_key.clone()))
                     .submenu(move_to)
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(menu_key.clone()))

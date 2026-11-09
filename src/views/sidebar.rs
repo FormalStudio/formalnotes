@@ -60,7 +60,7 @@ impl super::root::FormalNotes {
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         use super::metrics::{PILL_HEIGHT, PILL_RADIUS};
         use crate::actions::{
-            MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, Search, TrashEntry, shortcut,
+            MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, Search, TrashEntry, reveal_label, shortcut,
         };
         use crate::library::EntryId;
         use crate::nav::{ENTRY_DRAG, Location, parse_entry};
@@ -125,13 +125,13 @@ impl super::root::FormalNotes {
                     .item("New Folder Here", NewFolderIn(id.to_string()))
                     .separator()
                     .item("Rename…", RenameEntry(id.to_string()))
-                    .item("Reveal in Finder", RevealEntry(id.to_string()))
+                    .item(reveal_label(), RevealEntry(id.to_string()))
                     .separator()
                     .item_destructive("Move to Trash", TrashEntry(id.to_string())),
                 Some(EntryId::Note(n)) => {
                     let menu = menu
                         .item("Rename…", RenameEntry(id.to_string()))
-                        .item("Reveal in Finder", RevealEntry(id.to_string()));
+                        .item(reveal_label(), RevealEntry(id.to_string()));
                     let menu = if n.folder().is_root() {
                         menu
                     } else {
