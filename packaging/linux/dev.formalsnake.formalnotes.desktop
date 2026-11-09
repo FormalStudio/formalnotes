@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Formal Notes
+GenericName=Notes
+Comment=Write notes as Markdown files in folders
+Exec=formalnotes
+Icon=dev.formalsnake.formalnotes
+Terminal=false
+Categories=Office;Utility;TextEditor;
+Keywords=notes;markdown;writing;journal;
+StartupWMClass=dev.formalsnake.formalnotes
