@@ -264,7 +264,7 @@ impl Render for Editor {
                     .w_full()
                     .flex_1()
                     .min_h_0()
-                    .mt(theme.spacing.sm),
+                    .mt(px(TITLE_GAP)),
             )
             .child(in_column(words))
     }

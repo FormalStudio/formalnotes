@@ -7,6 +7,8 @@ pub const WINDOW_MIN: f32 = 480.;
 pub const SIDEBAR_WIDTH: f32 = 280.;
 pub const SIDEBAR_MIN: f32 = 240.;
 pub const SIDEBAR_MAX: f32 = 800.;
+/// The page keeps this much room beside the sidebar; the window stops narrowing there.
+pub const CONTENT_MIN: f32 = 420.;
 
 /// Page padding around the card grid.
 pub const PAGE_PAD_X: f32 = 24.;
@@ -41,11 +43,13 @@ pub const PAPER_RADIUS: f32 = 10.;
 /// Where the frosted front starts, as a share of the card's height.
 pub const FOLDER_FRONT_TOP: f32 = 0.5;
 
-/// Editor: the title, its line, and the least margin beside the text column.
+/// Editor: the title, its line, and the least margin beside the text column; the room above
+/// the title and between it and the body.
 pub const TITLE_SIZE: f32 = 34.;
 pub const TITLE_LINE: f32 = 55.;
 pub const EDITOR_MARGIN: f32 = 66.;
-pub const EDITOR_TOP: f32 = 24.;
+pub const EDITOR_TOP: f32 = 48.;
+pub const TITLE_GAP: f32 = 22.;
 
 /// Sidebar search pill.
 pub const PILL_HEIGHT: f32 = 30.;

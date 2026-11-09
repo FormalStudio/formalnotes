@@ -57,7 +57,7 @@ const NOTES: &[(&str, u64, &str)] = &[
     (
         "Projects/Launch/Release post.md",
         60 * 3,
-        "# Release post\n\nToday the first public version is out. It keeps your notes as plain Markdown files in a folder you choose, so they outlive the app.\n\n## What is in it\n\n- Folders and notes, side by side\n- Instant search\n- A quiet editor",
+        "# Release post\n\nToday the first public version is out. It keeps your notes as **plain Markdown files** in a folder you choose, so they outlive the app.\n\n## What is in it\n\n- Folders and notes, side by side\n- Instant search\n- A *quiet* editor\n\n---\n\nInstall it with Homebrew:\n\n```\nbrew install --cask formalnotes\n```\n\n> Every note is a `.md` file you can open anywhere.\n\nThe full list of changes is in [the changelog](CHANGELOG.md).",
     ),
     (
         "Projects/Launch/Press kit.md",

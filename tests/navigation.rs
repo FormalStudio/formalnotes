@@ -6,6 +6,7 @@ use formalnotes::actions::{GoBack, NewNote, OpenEntry, OpenPalette};
 use formalnotes::library::{FolderId, NoteId};
 use formalnotes::nav::Location;
 use formalnotes::views::FormalNotes;
+use nd::components::TextAreaProps;
 use nd::core::{NodeId, Point, WindowId};
 use nd::prelude::*;
 use nd::test::{Size, TestApp, by_test_id, text};
@@ -116,6 +117,19 @@ fn new_note_opens_in_the_current_folder() {
     assert_eq!(open.folder(), FolderId("Recipes".into()));
     rig.settle();
     assert!(rig.view().store().read(&rig.cx).note(&open).is_some());
+}
+
+#[nd::test]
+fn a_new_note_writes_on_the_page_not_in_a_field() {
+    let mut rig = open();
+    rig.act(&NewNote);
+    let id = rig.id();
+    let body = by_test_id(&mut rig.cx, id, "body").expect("the note's body").id;
+    let props = rig.cx.backend().props(body).and_then(|p| p.downcast_ref::<TextAreaProps>()).cloned();
+    let props = props.expect("the body is a text area");
+    // A bezelled area boxed the body in a bordered rectangle the width of the column.
+    assert!(props.borderless, "the body has no field chrome");
+    assert!(props.styles.is_some(), "the body styles its Markdown");
 }
 
 #[nd::test]

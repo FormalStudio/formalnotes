@@ -596,6 +596,7 @@ impl Render for FormalNotes {
                     .child(sidebar),
             )
             .content(content)
+            .content_min_width(super::metrics::CONTENT_MIN)
             .overlay(palette);
         self.actions(scaffold, cx)
     }
