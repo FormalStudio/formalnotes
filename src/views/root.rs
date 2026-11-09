@@ -586,6 +586,7 @@ impl Render for FormalNotes {
         let page = self.render_page(window, cx);
         let note = self.render_note(cx);
         let sidebar = self.render_sidebar(cx);
+        let trash = self.render_trash(cx);
         let palette = self.render_palette(cx);
         let rename = self.render_rename(cx);
         let toasts = toast_overlay("toasts")
@@ -640,7 +641,8 @@ impl Render for FormalNotes {
                         this.sidebar_width = e.width;
                         cx.notify();
                     }))
-                    .child(sidebar),
+                    .child(sidebar)
+                    .footer(trash),
             )
             .content(content)
             .content_min_width(super::metrics::CONTENT_MIN)

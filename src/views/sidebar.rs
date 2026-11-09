@@ -56,7 +56,7 @@ pub fn trash_node(count: usize) -> SourceNode {
 }
 
 impl super::root::FormalNotes {
-    /// The library tree, and the trash at the foot.
+    /// The library tree.
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         use crate::actions::{MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, TrashEntry, reveal_label};
         use crate::library::EntryId;
@@ -76,6 +76,7 @@ impl super::root::FormalNotes {
             .accepts_drops([ENTRY_DRAG])
             .drops_onto_rows()
             .flex_1()
+            .min_h_0()
             .on_select(cx.listener(|this, e: &SourceSelected, window, cx| match parse_entry(&e.id) {
                 Some(EntryId::Folder(folder)) => {
                     this.expanded.insert(folder.clone());
@@ -137,12 +138,20 @@ impl super::root::FormalNotes {
                 }
                 _ => menu.item("New Note", NewNoteIn(id.to_string())).item("New Folder", NewFolderIn(id.to_string())),
             });
-        let trash = source_list("sidebar-trash")
-            .nodes([trash_node(library.trash.len())])
-            .selected_opt((selected == TRASH_KEY).then_some(selected.clone()))
-            .flex_none()
-            .h(px(36.))
-            .on_select(cx.listener(|this, _: &SourceSelected, _, cx| this.go(Location::Trash, cx)));
-        v_flex().size_full().child(tree).child(trash).into_any_element()
+        tree.into_any_element()
+    }
+
+    /// The trash, pinned under the tree in the sidebar's footer.
+    pub(super) fn render_trash(&self, cx: &mut Context<Self>) -> AnyElement {
+        use crate::nav::Location;
+
+        let count = self.store.read(cx).library().trash.len();
+        let selected = self.switching.is_none() && self.open.is_none() && self.location == Location::Trash;
+        source_list("sidebar-trash")
+            .nodes([trash_node(count)])
+            .selected_opt(selected.then(|| TRASH_KEY.into()))
+            .fit_rows()
+            .on_select(cx.listener(|this, _: &SourceSelected, _, cx| this.go(Location::Trash, cx)))
+            .into_any_element()
     }
 }
