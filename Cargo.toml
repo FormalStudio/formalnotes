@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.95"
 
 [dependencies]
-nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', features = ["settings-ui"] }
+nd = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main", features = ["settings-ui"] }
 flume = "0.12"
 jiff = "0.2"
 notify = "8.2"
@@ -13,11 +13,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [dev-dependencies]
-nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', features = ["test", "audit"] }
+nd = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main", features = ["test", "audit"] }
 tempfile = "3"
 
 [build-dependencies]
-nd = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd', default-features = false, features = ["build"] }
+nd = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main", default-features = false, features = ["build"] }
 
 # The appearance audit owns the main thread (AppKit), so libtest's harness is off.
 [[test]]
@@ -35,11 +35,10 @@ print_stdout = "deny"
 
 # nd's GPUI patch queue.
 [patch.crates-io]
-gpui-pre = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre' }
-gpui-fast = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast' }
-gpui-pre-linux = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-linux' }
-gpui-fast-linux = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast-linux' }
-gpui-pre-wgpu = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-wgpu' }
-gpui-fast-wgpu = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-fast-wgpu' }
-gpui-pre-windows = { path = '/Users/kyandesutter/Developer/ecosystem/nativedesktop/crates/nd-gpui/vendor/gpui-pre-windows' }
-
+gpui-pre = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-fast = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-pre-linux = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-fast-linux = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-pre-wgpu = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-fast-wgpu = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
+gpui-pre-windows = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
