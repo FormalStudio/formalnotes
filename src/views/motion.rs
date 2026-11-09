@@ -36,3 +36,11 @@ pub fn paper(i: usize) -> Animation {
 
 /// How far a card rises on hover.
 pub const LIFT: f32 = 3.;
+
+/// How far below its place a page starts as it comes in on the layout spring.
+pub const PAGE_RISE: f32 = 8.;
+
+/// The editor's text going out and coming back when another note opens in it.
+pub fn switch() -> Animation {
+    Animation::fast()
+}

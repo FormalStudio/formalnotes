@@ -1,9 +1,11 @@
 //! The note presented over the page: a sheet of paper grows out of the note's card to fill the
-//! content region, then the path and the editor fade in on it.
+//! content region (or rises in when the card is not on screen), then the path and the editor
+//! fade in on it. Opening another note while one is open crossfades the text.
 
 use nd::prelude::*;
 
 use super::metrics::*;
+use super::motion;
 use super::root::FormalNotes;
 use crate::actions::GoBack;
 use crate::library::FolderId;
@@ -28,15 +30,23 @@ impl FormalNotes {
                 None => d.size_full(),
             })
             .hero_with(&self.presented, self.hero.clone());
-        let page = v_flex()
+        let switching = self.switching.is_some();
+        let content = v_flex()
+            .id("note-content")
+            .size_full()
+            .opacity(if switching { 0. } else { 1. })
+            .animate(motion::switch())
+            .on_animation_end(cx.listener(|this, _: &AnimationEnded, window, cx| this.finish_switch(window, cx)))
+            .child(self.note_header(cx))
+            .child(div().flex_1().min_h_0().child(self.editor.clone()));
+        let page = div()
             .absolute()
             .top_0()
             .left_0()
             .size_full()
             .bg(theme.surface.raised)
             .reveal_with(&self.presented)
-            .child(self.note_header(cx))
-            .child(div().flex_1().min_h_0().child(self.editor.clone()));
+            .child(content);
         div().id("note").size_full().relative().child(paper).child(page).into_any_element()
     }
 

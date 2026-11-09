@@ -14,11 +14,23 @@ use crate::nav::{Location, card_id, entry_key, folder_key};
 use crate::settings::{NotesSettings, SortOrder};
 
 impl FormalNotes {
+    /// The page for the location, keyed by it: a new page rises in as the one it replaces fades
+    /// out where it stood, so Home, folders and the trash cross over rather than cut.
     pub(super) fn render_page(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        match self.location.clone() {
-            Location::Folder(folder) => self.folder_page(&folder, cx),
-            Location::Trash => self.trash_page(cx),
-        }
+        let (key, page) = match self.location.clone() {
+            Location::Folder(folder) => (format!("page:{}", folder_key(&folder)), self.folder_page(&folder, cx)),
+            Location::Trash => ("page:trash".to_owned(), self.trash_page(cx)),
+        };
+        // The window opens with its page in place: only a page after the first comes in.
+        let shown = self.region.is_some();
+        div()
+            .id(key)
+            .size_full()
+            .animate(motion::layout())
+            .when(shown, |d| d.enter_from(|p| p.opacity(0.).offset(px(0.), px(motion::PAGE_RISE))))
+            .exit_to(|p| p.opacity(0.))
+            .child(page)
+            .into_any_element()
     }
 
     fn folder_page(&self, folder: &FolderId, cx: &mut Context<Self>) -> AnyElement {
@@ -89,8 +101,7 @@ impl FormalNotes {
         let gap = if beside_folders { CARD_GAP_FOLDERS } else { CARD_GAP };
         let header = self.header(folder, count, cx);
         let body = if empty {
-            div()
-                .flex_1()
+            empty_state(self.region.is_some())
                 .child(
                     status_page(if folder.is_root() { "No notes yet" } else { "This folder is empty" })
                         .icon(Icon::Notebook)
@@ -227,8 +238,7 @@ impl FormalNotes {
             .child(div().flex_1())
             .when(!items.is_empty(), |h| h.child(button("empty-trash", "Empty Trash").dispatch(EmptyTrash)));
         let body = if items.is_empty() {
-            div()
-                .flex_1()
+            empty_state(self.region.is_some())
                 .child(
                     status_page("Trash is empty")
                         .icon(Icon::Trash)
@@ -250,6 +260,12 @@ impl FormalNotes {
         };
         v_flex().id("page").size_full().child(header).child(body).into_any_element()
     }
+}
+
+/// Where a page's empty state goes: it fades in when the last card leaves. Not while the window
+/// opens, which shows its first page as it is.
+fn empty_state(shown: bool) -> Div {
+    div().id("empty").flex_1().animate(Animation::normal()).when(shown, |d| d.enter_from(|p| p.opacity(0.)))
 }
 
 fn page_title(theme: &Theme, title: &str) -> Text {

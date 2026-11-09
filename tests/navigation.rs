@@ -79,6 +79,10 @@ impl Rig {
         idle(&mut self.cx);
     }
 
+    fn view_region(&self) -> (f32, f32) {
+        self.view().region().expect("the region is measured")
+    }
+
     fn all_text(&mut self) -> String {
         let id = self.id();
         text(&mut self.cx, id)
@@ -242,4 +246,132 @@ fn a_card_dips_while_it_is_pressed() {
             rig.cx.backend().props(face).and_then(|p| p.downcast_ref::<DivProps>()).cloned().expect("a div");
         assert_eq!(props.active.and_then(|p| p.scale), Some(0.98), "{key} dips to 98%");
     }
+}
+
+/// The node `test_id` without settling: a stopped clock would hold its motion forever.
+fn node_now(rig: &mut Rig, test_id: &str) -> Option<NodeId> {
+    let tree = rig.cx.semantic_window(rig.id())?.root;
+    tree.iter().find(|n| n.test_id.as_deref() == Some(test_id)).map(|n| n.id)
+}
+
+fn div_props(rig: &mut Rig, test_id: &str) -> Option<nd::test::DivProps> {
+    let node = node_now(rig, test_id)?;
+    rig.cx.backend().props(node).and_then(|p| p.downcast_ref::<nd::test::DivProps>()).cloned()
+}
+
+/// One frame on a moving clock, without settling.
+fn step(rig: &mut Rig, seconds: f64) {
+    rig.cx.flush_effects();
+    rig.cx.drain_events();
+    rig.cx.advance_clock(seconds);
+    rig.cx.frame();
+}
+
+fn page_comes_in(reduce: bool) {
+    let mut rig = open();
+    rig.cx.set_reduce_motion(reduce);
+    let id = rig.id();
+    let home = by_test_id(&mut rig.cx, id, &format!("page:{}", formalnotes::nav::HOME_KEY)).expect("Home's page").id;
+    assert!(rig.cx.dispatch_action(id, &OpenEntry("folder:Journal".into())));
+    step(&mut rig, 1. / 60.);
+    step(&mut rig, 0.05);
+    let page = div_props(&mut rig, "page:folder:Journal").expect("the folder's page");
+    let o = page.style.opacity.expect("fading in");
+    assert!(o > 0. && o < 1., "fading in: {o}");
+    if reduce {
+        assert_eq!(page.transform.offset, (0., 0.), "reduce motion only fades");
+    } else {
+        assert!(page.transform.offset.1 > 0., "rising: {:?}", page.transform.offset);
+    }
+    let old = rig.cx.backend().props(home).and_then(|p| p.downcast_ref::<nd::test::DivProps>().cloned());
+    let old = old.expect("Home's page is held while it fades out");
+    assert!(old.inert && old.style.opacity.unwrap_or(1.) < 1., "Home fades out where it stood");
+    idle(&mut rig.cx);
+    assert!(!rig.cx.backend().is_live(home), "gone once faded");
+    assert_eq!(div_props(&mut rig, "page:folder:Journal").and_then(|p| p.style.opacity).unwrap_or(1.), 1.);
+}
+
+#[nd::test]
+fn a_new_page_rises_in_over_the_old_one_fading_out() {
+    page_comes_in(false);
+}
+
+#[nd::test]
+fn under_reduce_motion_pages_crossfade() {
+    page_comes_in(true);
+}
+
+fn switch_notes(reduce: bool) {
+    let mut rig = open();
+    rig.cx.set_reduce_motion(reduce);
+    let (monday, ideas) = (NoteId("Journal/Monday.md".into()), NoteId("Ideas.md".into()));
+    rig.act(&OpenEntry(format!("note:{}", monday.0)));
+    let id = rig.id();
+    assert!(rig.cx.dispatch_action(id, &OpenEntry(format!("note:{}", ideas.0))));
+    step(&mut rig, 1. / 60.);
+    step(&mut rig, 0.05);
+    assert_eq!(rig.view().open_note(), Some(&monday), "the open note's text fades out first");
+    let o = div_props(&mut rig, "note-content").and_then(|p| p.style.opacity).expect("fading");
+    assert!(o < 1., "fading out: {o}");
+    idle(&mut rig.cx);
+    assert_eq!(rig.view().open_note(), Some(&ideas), "then the other note takes the editor");
+    assert_eq!(div_props(&mut rig, "note-content").and_then(|p| p.style.opacity).unwrap_or(1.), 1.);
+    assert!(rig.all_text().contains("Ideas"));
+}
+
+#[nd::test]
+fn switching_notes_in_the_editor_crossfades_the_text() {
+    switch_notes(false);
+}
+
+#[nd::test]
+fn under_reduce_motion_switching_notes_crossfades_too() {
+    switch_notes(true);
+}
+
+#[nd::test]
+fn a_new_note_grows_out_of_its_new_card() {
+    let mut rig = open();
+    rig.act(&OpenEntry("folder:Journal".into()));
+    let id = rig.id();
+    assert!(rig.cx.dispatch_action(id, &NewNote));
+    for _ in 0..3 {
+        step(&mut rig, 1. / 60.);
+    }
+    step(&mut rig, 0.05);
+    let paper = node_now(&mut rig, "note-paper").expect("the note's paper");
+    let width = rig.cx.backend().frame(paper).expect("laid out").size.width;
+    let (region, _) = rig.view_region();
+    assert!(width < region - 1., "on its way out of the card, not popped to full size: {width} of {region}");
+    idle(&mut rig.cx);
+    let width = rig.cx.backend().frame(paper).expect("laid out").size.width;
+    assert!((width - region).abs() < 1., "fills the region: {width} of {region}");
+}
+
+fn new_note_over(reduce: bool) {
+    let mut rig = open();
+    rig.cx.set_reduce_motion(reduce);
+    let monday = NoteId("Journal/Monday.md".into());
+    rig.act(&OpenEntry(format!("note:{}", monday.0)));
+    let id = rig.id();
+    assert!(rig.cx.dispatch_action(id, &NewNote));
+    step(&mut rig, 1. / 60.);
+    step(&mut rig, 0.05);
+    assert_eq!(rig.view().open_note(), Some(&monday), "the open note's text fades out first");
+    let o = div_props(&mut rig, "note-content").and_then(|p| p.style.opacity).expect("fading");
+    assert!(o < 1., "fading out: {o}");
+    idle(&mut rig.cx);
+    let open = rig.view().open_note().cloned().expect("a note is open");
+    assert_ne!(open, monday, "the new note takes the editor");
+    assert_eq!(open.folder(), monday.folder());
+}
+
+#[nd::test]
+fn a_new_note_over_an_open_one_crossfades_in() {
+    new_note_over(false);
+}
+
+#[nd::test]
+fn under_reduce_motion_a_new_note_over_an_open_one_crossfades_in() {
+    new_note_over(true);
 }

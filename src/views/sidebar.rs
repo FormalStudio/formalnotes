@@ -67,7 +67,7 @@ impl super::root::FormalNotes {
 
         let theme = cx.theme().clone();
         let library = self.store.read(cx).library();
-        let selected: SharedString = match (&self.open, &self.location) {
+        let selected: SharedString = match (self.switching.as_ref().or(self.open.as_ref()), &self.location) {
             (Some(note), _) => note_key(note),
             (None, Location::Folder(folder)) => folder_key(folder),
             (None, Location::Trash) => TRASH_KEY.into(),

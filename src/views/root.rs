@@ -30,6 +30,9 @@ pub struct FormalNotes {
     pub(super) presented: Presentation,
     /// The card the presented note grows from and closes back onto; kept through the close.
     pub(super) hero: SharedString,
+    /// The note opening in place of the one in the editor: its text fades out first, and
+    /// this one comes in once it has.
+    pub(super) switching: Option<NoteId>,
     pub(super) expanded: HashSet<FolderId>,
     /// The card under the pointer, which lifts.
     pub(super) hovered: Option<SharedString>,
@@ -77,6 +80,7 @@ impl FormalNotes {
             shown: None,
             presented: Presentation::new(),
             hero: SharedString::default(),
+            switching: None,
             expanded: HashSet::new(),
             hovered: None,
             region: None,
@@ -105,6 +109,11 @@ impl FormalNotes {
 
     pub fn open_note(&self) -> Option<&NoteId> {
         self.open.as_ref()
+    }
+
+    /// The content region's size, once measured.
+    pub fn region(&self) -> Option<(f32, f32)> {
+        self.region
     }
 
     pub fn palette_open(&self) -> bool {
@@ -169,13 +178,25 @@ impl FormalNotes {
         cx.notify();
     }
 
-    /// Presents a note over its folder's page, growing out of its card.
+    /// Presents a note over its folder's page, growing out of its card. Over another open note
+    /// it crossfades: the open one's text fades out, then this one's fades in.
     pub fn show_note(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
         if self.store.read(cx).note(&id).is_none() {
             return;
         }
         let folder = id.folder();
         self.reveal_in_sidebar(&folder);
+        if self.presented.is_open() && self.open.as_ref().is_some_and(|open| *open != id) {
+            self.switching = Some(id);
+            cx.notify();
+            return;
+        }
+        self.present(id, window, cx);
+    }
+
+    fn present(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+        self.switching = None;
+        let folder = id.folder();
         // Over its own folder, so the card it grows from (and closes back onto) is on screen.
         if self.location != Location::Folder(folder.clone()) && !self.presented.is_open() {
             self.location = Location::Folder(folder);
@@ -188,7 +209,17 @@ impl FormalNotes {
         cx.notify();
     }
 
+    /// The open note's text has faded out: the note waiting to switch in takes the editor.
+    pub(super) fn finish_switch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.switching.take()
+            && self.store.read(cx).note(&id).is_some()
+        {
+            self.present(id, window, cx);
+        }
+    }
+
     pub fn close_note(&mut self, cx: &mut Context<Self>) {
+        self.switching = None;
         if self.open.take().is_some() {
             self.presented.set_open(false);
             self.editor.update(cx, |editor, cx| editor.close(cx));
@@ -227,7 +258,6 @@ impl FormalNotes {
 
     pub fn new_note_in(&mut self, folder: &FolderId, window: &mut Window, cx: &mut Context<Self>) {
         let id = self.store.update(cx, |store, cx| store.create_note(folder, cx));
-        self.close_note(cx);
         self.location = Location::Folder(id.folder());
         self.show_note(id, window, cx);
         window.focus_id(cx, BODY);
