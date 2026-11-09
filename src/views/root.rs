@@ -536,6 +536,7 @@ impl FormalNotes {
     fn render_rename(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (entry, state) = self.rename.as_ref()?;
         let theme = cx.theme().clone();
+        let name_len = state.read(cx).text().chars().count();
         let what = match entry {
             EntryId::Note(_) => "Rename Note",
             EntryId::Folder(_) => "Rename Folder",
@@ -550,6 +551,7 @@ impl FormalNotes {
                     text_field(RENAME_FIELD)
                         .bind(state)
                         .label("Name")
+                        .select_on_focus(0..name_len)
                         .on_submit(cx.listener(|this, _: &TextSubmitted, _, cx| this.commit_rename(cx))),
                 )
                 .child(

@@ -2,7 +2,7 @@
 
 //! Tier 1: the window over the demo library: pages, the presented note, and the palette.
 
-use formalnotes::actions::{GoBack, NewNote, OpenEntry, OpenPalette};
+use formalnotes::actions::{GoBack, NewFolder, NewNote, OpenEntry, OpenPalette};
 use formalnotes::library::{FolderId, NoteId};
 use formalnotes::nav::Location;
 use formalnotes::views::FormalNotes;
@@ -134,6 +134,20 @@ fn a_new_note_writes_on_the_page_not_in_a_field() {
     // A bezelled area boxed the body in a bordered rectangle the width of the column.
     assert!(props.borderless, "the body has no field chrome");
     assert!(props.styles.is_some(), "the body styles its Markdown");
+}
+
+#[nd::test]
+fn a_new_folder_opens_its_rename_with_the_name_selected() {
+    use nd::components::TextFieldProps;
+    let mut rig = open();
+    rig.act(&NewFolder);
+    let id = rig.id();
+    let field = by_test_id(&mut rig.cx, id, "rename-field").expect("the rename field").id;
+    let props = rig.cx.backend().props(field).and_then(|p| p.downcast_ref::<TextFieldProps>()).cloned();
+    let props = props.expect("a text field");
+    let name = props.text.chars().count();
+    assert!(name > 0, "the field starts with the folder's name");
+    assert_eq!(props.select_on_focus, Some(0..name), "typing replaces the whole name");
 }
 
 #[nd::test]
