@@ -66,6 +66,18 @@ pub fn shortcut(action: &dyn Action) -> Option<&'static str> {
     }
 }
 
+/// The menu item that shows an entry in the system's file manager.
+pub fn reveal_label() -> &'static str {
+    // nd-allow(cfg-target-os): menu labels only
+    if cfg!(target_os = "macos") {
+        "Reveal in Finder"
+    } else if cfg!(windows) {
+        "Show in Explorer"
+    } else {
+        "Show in Files"
+    }
+}
+
 pub fn init(cx: &mut App) {
     cx.bind_keys(nd::actions::standard_bindings());
     cx.bind_keys([
