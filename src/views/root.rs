@@ -13,7 +13,7 @@ use super::notices::{Notices, Undo};
 use super::palette::{self, Command, Mode};
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, NoteId, Sort, Store};
-use crate::nav::{Location, card_id, parse_entry};
+use crate::nav::{Location, parse_entry};
 use crate::settings::{NotesSettings, SortOrder, ThemeChoice};
 
 const RENAME_FIELD: &str = "rename-field";
@@ -28,8 +28,6 @@ pub struct FormalNotes {
     /// was instead of losing its path first.
     pub(super) shown: Option<NoteId>,
     pub(super) presented: Presentation,
-    /// The card the presented note grows from and closes back onto; kept through the close.
-    pub(super) hero: SharedString,
     /// The note opening in place of the one in the editor: its text fades out first, and
     /// this one comes in once it has.
     pub(super) switching: Option<NoteId>,
@@ -61,7 +59,6 @@ impl FormalNotes {
                 store.clone(),
                 move |moved, _window, cx| {
                     let _ = this.update(cx, |root, cx| {
-                        root.hero = crate::nav::card_id(&EntryId::Note(moved.clone()));
                         root.open = Some(moved.clone());
                         root.shown = Some(moved.clone());
                         cx.notify();
@@ -79,7 +76,6 @@ impl FormalNotes {
             open: None,
             shown: None,
             presented: Presentation::new(),
-            hero: SharedString::default(),
             switching: None,
             expanded: HashSet::new(),
             hovered: None,
@@ -202,7 +198,6 @@ impl FormalNotes {
             self.location = Location::Folder(folder);
         }
         self.editor.update(cx, |editor, cx| editor.open(id.clone(), window, cx));
-        self.hero = card_id(&EntryId::Note(id.clone()));
         self.shown = Some(id.clone());
         self.open = Some(id);
         self.presented.set_open(true);
@@ -310,7 +305,6 @@ impl FormalNotes {
             && let Some(path) = rebase(&note.0, &from, &to)
         {
             let moved = NoteId(path);
-            self.hero = card_id(&EntryId::Note(moved.clone()));
             self.open = Some(moved.clone());
             self.shown = Some(moved.clone());
             self.editor.update(cx, |editor, cx| editor.follow(moved, cx));

@@ -52,9 +52,14 @@ pub fn parse_entry(key: &str) -> Option<EntryId> {
     key.strip_prefix("folder:").filter(|p| !p.is_empty()).map(|p| EntryId::Folder(FolderId(p.to_owned())))
 }
 
-/// The id of a card's tile: the frame a presented note grows from.
+/// The id of a card's tile in the grid.
 pub fn card_id(entry: &EntryId) -> SharedString {
     format!("card:{}", entry_key(entry)).into()
+}
+
+/// The id of a note card's frame: what a presented note grows out of and closes back onto.
+pub fn frame_id(entry: &EntryId) -> SharedString {
+    format!("frame:{}", entry_key(entry)).into()
 }
 
 #[cfg(test)]

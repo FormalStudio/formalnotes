@@ -1,5 +1,5 @@
 //! The card grid: nd's `tile_grid` at the design's column count for the content region's width.
-//! Each tile is keyed by its card's key, the frame a presented note grows from.
+//! Each tile is keyed by its card's key.
 
 use nd::components::{tile, tile_grid};
 use nd::prelude::*;

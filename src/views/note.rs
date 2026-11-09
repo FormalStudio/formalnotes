@@ -1,35 +1,29 @@
-//! The note presented over the page: a sheet of paper grows out of the note's card to fill the
-//! content region (or rises in when the card is not on screen), then the path and the editor
-//! fade in on it. Opening another note while one is open crossfades the text.
+//! The note presented over the page, as a container transform: a sheet grows out of the
+//! note's card to fill the content region, from the card's ring and corners to the page's
+//! flat surface, carrying the card's title and preview at their size while they fade out, and
+//! the path and the editor, laid out at full size, fade in as it grows. Closing plays it back
+//! into the card. When the card is not on screen the sheet rises in instead. Opening another
+//! note while one is open crossfades the text.
 
 use nd::prelude::*;
 
+use super::cards;
 use super::metrics::*;
 use super::motion;
 use super::root::FormalNotes;
 use crate::actions::GoBack;
-use crate::library::FolderId;
-use crate::nav::{Location, folder_key};
+use crate::library::{EntryId, FolderId};
+use crate::nav::{Location, folder_key, frame_id};
 
 impl FormalNotes {
     pub(super) fn render_note(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
-        // The paper's size is given in points so it grows with the travel; before the region
-        // has been measured it just fills it.
-        let paper = div()
-            .id("note-paper")
-            .absolute()
-            .top_0()
-            .left_0()
-            .bg(theme.surface.raised)
-            .border_1()
-            .border_color(theme.border.subtle)
-            .rounded(px(PAGE_RADIUS))
-            .map(|d| match self.region {
-                Some((w, h)) => d.w(px(w)).h(px(h)),
-                None => d.size_full(),
-            })
-            .hero_with(&self.presented, self.hero.clone());
+        let card = self
+            .shown
+            .as_ref()
+            .and_then(|id| self.store.read(cx).note(id))
+            .map(|n| cards::note_page(&theme, &n.title, &n.text).hero_content());
+        let source = self.shown.as_ref().map(|id| frame_id(&EntryId::Note(id.clone()))).unwrap_or_default();
         let switching = self.switching.is_some();
         let content = v_flex()
             .id("note-content")
@@ -39,15 +33,24 @@ impl FormalNotes {
             .on_animation_end(cx.listener(|this, _: &AnimationEnded, window, cx| this.finish_switch(window, cx)))
             .child(self.note_header(cx))
             .child(div().flex_1().min_h_0().child(self.editor.clone()));
-        let page = div()
+        let page = div().absolute().top_0().left_0().size_full().reveal_with(&self.presented).child(content);
+        // The sheet's size is given in points so it grows with the travel; before the region
+        // has been measured it just fills it.
+        let sheet = div()
+            .id("note-paper")
             .absolute()
             .top_0()
             .left_0()
-            .size_full()
             .bg(theme.surface.raised)
-            .reveal_with(&self.presented)
-            .child(content);
-        div().id("note").size_full().relative().child(paper).child(page).into_any_element()
+            .overflow_hidden()
+            .map(|d| match self.region {
+                Some((w, h)) => d.w(px(w)).h(px(h)),
+                None => d.size_full(),
+            })
+            .hero_with(&self.presented, source)
+            .children(card)
+            .child(page);
+        div().id("note").size_full().relative().child(sheet).into_any_element()
     }
 
     /// Back, then the note's path: Home, its folders, its title.

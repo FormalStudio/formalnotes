@@ -20,9 +20,9 @@ pub const HEADER_HEIGHT: f32 = 48.;
 pub const CARD_ASPECT: f32 = 264. / 236.;
 pub const CARD_GAP: f32 = 16.;
 pub const CARD_GAP_FOLDERS: f32 = 24.;
-pub const CARD_FRAME: f32 = 4.;
+/// The ring a note card's page sits in.
+pub const CARD_FRAME: f32 = 5.;
 pub const CARD_RADIUS: f32 = 20.;
-pub const PAGE_RADIUS: f32 = 16.;
 pub const CARD_PADDING: f32 = 16.;
 /// The date line under a card.
 pub const CARD_FOOTER: f32 = 22.;

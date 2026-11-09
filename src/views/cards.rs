@@ -15,6 +15,8 @@ pub const GROUP: &str = "card";
 
 /// What a note card shows.
 pub struct NoteFace<'a> {
+    /// The frame's id, which a presented note grows out of.
+    pub frame: SharedString,
     pub title: &'a str,
     pub text: &'a str,
     /// The line under the card: a relative date, or where a trashed note came from.
@@ -25,20 +27,41 @@ pub struct NoteFace<'a> {
 }
 
 pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
-    let lines = preview(face.text, PREVIEW_LINES);
-    let empty = lines.is_empty();
-    let page = v_flex()
+    let lift = if face.hovered { -motion::LIFT } else { 0. };
+    v_flex()
         .size_full()
-        .rounded(px(PAGE_RADIUS))
-        .bg(theme.surface.raised)
-        .border_1()
-        .border_color(theme.border.subtle)
-        .overflow_hidden()
+        .when(face.beside_folders, |c| c.child(div().flex_none().h(relative(FOLDER_TAB_RISE))))
+        .child(
+            div()
+                .id(face.frame)
+                .flex_1()
+                .min_h_0()
+                .rounded(px(CARD_RADIUS))
+                .border(px(CARD_FRAME))
+                .border_color(theme.border.subtle)
+                .group_hover(GROUP, |s| s.border_color(theme.border.strong))
+                .bg(theme.surface.raised)
+                .overflow_hidden()
+                .shadow(crate::theme::card_shadow(theme, face.hovered))
+                .offset(px(0.), px(lift))
+                .animate(motion::hover(face.hovered))
+                .child(note_page(theme, face.title, face.text)),
+        )
+        .child(caption(theme, face.caption))
+}
+
+/// A note's miniature: its title and first lines. A card frames it, and a note opening out of
+/// its card carries it until the editor takes over.
+pub fn note_page(theme: &Theme, title: &str, body: &str) -> Div {
+    let lines = preview(body, PREVIEW_LINES);
+    let empty = lines.is_empty();
+    v_flex()
+        .size_full()
         .p(px(CARD_PADDING))
         .gap(px(2.))
         .child(
             div().flex_none().mb(px(6.)).child(
-                text(face.title.to_owned())
+                text(title.to_owned())
                     .text_size(theme.type_scale.body)
                     .line_height(px(TITLE_PREVIEW_LINE))
                     .font_weight(FontWeight::BOLD)
@@ -57,25 +80,7 @@ pub fn note_card(theme: &Theme, face: NoteFace<'_>) -> Div {
                     .justify_center()
                     .child(text("Blank note").text_size(theme.type_scale.caption).text_color(theme.text.secondary)),
             )
-        });
-    let lift = if face.hovered { -motion::LIFT } else { 0. };
-    v_flex()
-        .size_full()
-        .when(face.beside_folders, |c| c.child(div().flex_none().h(relative(FOLDER_TAB_RISE))))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .p(px(CARD_FRAME))
-                .rounded(px(CARD_RADIUS))
-                .bg(theme.border.subtle)
-                .group_hover(GROUP, |s| s.bg(theme.border.strong))
-                .shadow(crate::theme::card_shadow(theme, face.hovered))
-                .offset(px(0.), px(lift))
-                .animate(motion::hover(face.hovered))
-                .child(page),
-        )
-        .child(caption(theme, face.caption))
+        })
 }
 
 fn caption(theme: &Theme, label: String) -> Div {

@@ -10,7 +10,7 @@ use super::motion;
 use super::root::FormalNotes;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
-use crate::nav::{Location, card_id, entry_key, folder_key};
+use crate::nav::{Location, card_id, entry_key, folder_key, frame_id};
 use crate::settings::{NotesSettings, SortOrder};
 
 impl FormalNotes {
@@ -71,6 +71,7 @@ impl FormalNotes {
             let face = cards::note_card(
                 &theme,
                 NoteFace {
+                    frame: frame_id(&entry),
                     title: &n.title,
                     text: &n.text,
                     caption: format::relative(n.modified, now),
@@ -212,7 +213,14 @@ impl FormalNotes {
                 let face = match &item.kind {
                     crate::library::TrashKind::Note { text } => cards::note_card(
                         &theme,
-                        NoteFace { title: &item.title, text, caption, hovered: false, beside_folders: false },
+                        NoteFace {
+                            frame: format!("frame:trash:{}", item.name).into(),
+                            title: &item.title,
+                            text,
+                            caption,
+                            hovered: false,
+                            beside_folders: false,
+                        },
                     ),
                     crate::library::TrashKind::Folder { items } => cards::folder_card(
                         &theme,
