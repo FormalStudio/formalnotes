@@ -4,6 +4,7 @@
 
 use jiff::Timestamp;
 use nd::prelude::*;
+use nd::theme::Scheme;
 
 use super::format;
 use super::metrics::*;
@@ -153,7 +154,7 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
         let content = match (i, face.first_page) {
             (0, Some(page)) => v_flex()
                 .gap(px(1.))
-                .children(preview(page, 6).into_iter().map(|line| preview_line(theme, line)))
+                .children(preview(page, PREVIEW_LINES).into_iter().map(|line| preview_line(theme, line)))
                 .into_any_element(),
             _ => v_flex()
                 .gap(px(5.))
@@ -209,7 +210,7 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
                 .bg(theme.surface.raised_hover),
         )
         .children((0..papers).rev().map(paper))
-        // The front panel, over the papers' lower half.
+        // The front panel, over the papers' lower half, which run on under it.
         .child(
             div()
                 .absolute()
@@ -217,13 +218,9 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
                 .right_0()
                 .bottom_0()
                 .top(relative(FOLDER_FRONT_TOP))
-                .rounded(px(FOLDER_RADIUS))
-                .bg(theme.surface.raised)
-                .border_1()
-                .border_color(theme.border.subtle)
-                .opacity(0.94)
                 .offset(px(0.), px(front_y))
-                .animate(motion::folder_open()),
+                .animate(motion::folder_open())
+                .child(front_panel(theme)),
         )
         .child(
             v_flex()
@@ -257,6 +254,22 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
                 .opacity(if face.targeted { 1. } else { 0. })
                 .animate(motion::hover(face.targeted)),
         )
+}
+
+/// Liquid Glass on macOS. A dark scheme takes the clear glass, tinted so the item count keeps
+/// its contrast; a light one the regular glass, as the clear glass under Reduce Transparency
+/// turns into a grey slab and nd does not report that setting. GPUI cannot blur what is
+/// behind an element, so there the panel is the see-through raised surface.
+fn front_panel(theme: &Theme) -> Glass {
+    let dark = theme.scheme == Scheme::Dark;
+    let see_through = |g: Glass| g.tint(crate::theme::folder_front_fill(theme));
+    glass()
+        .size_full()
+        .rounded(px(FOLDER_RADIUS))
+        .on_macos(|g| g.when(dark, |g| g.variant(GlassVariant::Clear).tint(crate::theme::folder_glass_tint(theme))))
+        .on_linux(see_through)
+        .on_windows(see_through)
+        .on_web(see_through)
 }
 
 /// A trashed note or folder: its card, captioned with where it came from.

@@ -1,4 +1,5 @@
-//! The colours the app names itself: the design's shadows, which no theme token carries.
+//! The colours the app names itself: the design's shadows and the folder panel's see-through
+//! fills, which no theme token carries.
 
 use nd::prelude::*;
 use nd::theme::{Scheme, Theme};
@@ -20,6 +21,16 @@ pub fn card_shadow(theme: &Theme, lifted: bool) -> Vec<BoxShadow> {
             inset: false,
         })
         .collect()
+}
+
+/// Darkens the clear glass of a folder's front panel by half the raised surface.
+pub fn folder_glass_tint(theme: &Theme) -> Hsla {
+    theme.surface.raised.opacity(0.5)
+}
+
+/// A folder's front panel where there is no glass to blur the papers behind it.
+pub fn folder_front_fill(theme: &Theme) -> Hsla {
+    theme.surface.raised.opacity(0.85)
 }
 
 #[cfg(test)]
