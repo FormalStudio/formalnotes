@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use nd::prelude::*;
 
-use crate::library::EntryId;
+use crate::library::{EntryId, FolderId};
 
 /// What a toast's Undo does.
 #[derive(Clone, Debug, PartialEq)]
@@ -13,6 +13,8 @@ pub enum Undo {
     Restore(String),
     /// Move the restored entry to the trash again.
     Trash(EntryId),
+    /// Move the entry back to the folder it came from.
+    Move(EntryId, FolderId),
 }
 
 #[derive(Default)]

@@ -10,7 +10,7 @@ use super::motion;
 use super::root::FormalNotes;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
-use crate::nav::{Location, card_id, entry_key, folder_key};
+use crate::nav::{ENTRY_DRAG, Location, card_id, dragged_entry, entry_key, folder_key};
 use crate::settings::{NotesSettings, SortOrder};
 
 impl FormalNotes {
@@ -52,6 +52,7 @@ impl FormalNotes {
                     items: library.count(&f.id),
                     first_page: first.as_deref(),
                     hovered: self.hovered.as_ref() == Some(&card_id(&entry)),
+                    targeted: self.drop_target.as_ref() == Some(&card_id(&entry)),
                 },
             );
             let menu_key = entry_key(&entry).to_string();
@@ -121,6 +122,7 @@ impl FormalNotes {
                     format!("cards:{}", folder_key(folder)),
                     tiles,
                     gap,
+                    true,
                 )))
                 .into_any_element()
         };
@@ -128,10 +130,20 @@ impl FormalNotes {
         v_flex().id("page").size_full().child(header).child(body).into_any_element()
     }
 
-    /// A card in the grid: it lifts under the pointer and opens on a click.
+    /// A card in the grid: it lifts under the pointer and opens on a click. A folder card takes
+    /// dragged entries: it grows a little and rings while one is over it, opens after the drag
+    /// rests on it, and moves what is dropped on it into the folder.
     fn tile(&self, entry: EntryId, face: Div, cx: &mut Context<Self>) -> (SharedString, AnyElement) {
         let id = card_id(&entry);
         let hover_id = id.clone();
+        // Under Reduce Motion the ring fades in on its own.
+        let grow = self.drop_target.as_ref() == Some(&id) && !cx.reduce_motion();
+        let face = match &entry {
+            EntryId::Folder(folder) => {
+                self.folder_drops(face, &id, folder, cx).scale(if grow { DROP_SCALE } else { 1. })
+            }
+            EntryId::Note(_) => face,
+        };
         let face = face
             .id(format!("face:{}", entry_key(&entry)))
             .group(GROUP)
@@ -151,6 +163,32 @@ impl FormalNotes {
             }))
             .on_tap(cx.listener(move |this, _: &TapEvent, window, cx| this.open_entry(&entry, window, cx)));
         (id, face.into_any_element())
+    }
+
+    fn folder_drops(&self, face: Div, id: &SharedString, folder: &FolderId, cx: &mut Context<Self>) -> Div {
+        let (over, dropped, sprung) = (id.clone(), folder.clone(), folder.clone());
+        face.accepts_drops([ENTRY_DRAG])
+            .on_drag_over(cx.listener(move |this, e: &DragOver, _, cx| {
+                let target = (e.phase != DragOverPhase::Exited).then(|| over.clone());
+                if target.is_none() && this.drop_target.as_ref() != Some(&over) {
+                    return;
+                }
+                if this.drop_target != target {
+                    this.drop_target = target;
+                    cx.notify();
+                }
+            }))
+            .on_drop(cx.listener(move |this, e: &Dropped, _, cx| {
+                this.drop_target = None;
+                if let Some(entry) = dragged_entry(&e.item.id) {
+                    this.move_entry(&entry, &dropped, cx);
+                }
+                cx.notify();
+            }))
+            .on_spring_load(cx.listener(move |this, _: &SpringLoaded, _, cx| {
+                this.drop_target = None;
+                this.go(Location::Folder(sprung.clone()), cx);
+            }))
     }
 
     /// The page's title (a path of crumbs inside folders), its count, and the sort menu.
@@ -216,7 +254,13 @@ impl FormalNotes {
                     ),
                     crate::library::TrashKind::Folder { items } => cards::folder_card(
                         &theme,
-                        FolderFace { name: &item.title, items: *items, first_page: None, hovered: false },
+                        FolderFace {
+                            name: &item.title,
+                            items: *items,
+                            first_page: None,
+                            hovered: false,
+                            targeted: false,
+                        },
                     ),
                 };
                 let name = item.name.clone();
@@ -255,6 +299,7 @@ impl FormalNotes {
                     "cards:trash",
                     tiles,
                     CARD_GAP,
+                    false,
                 )))
                 .into_any_element()
         };

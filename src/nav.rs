@@ -57,6 +57,11 @@ pub fn card_id(entry: &EntryId) -> SharedString {
     format!("card:{}", entry_key(entry)).into()
 }
 
+/// The entry an [`ENTRY_DRAG`] carries: a sidebar row's key, or a card's id.
+pub fn dragged_entry(id: &str) -> Option<EntryId> {
+    parse_entry(id.strip_prefix("card:").unwrap_or(id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

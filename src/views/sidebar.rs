@@ -60,7 +60,7 @@ impl super::root::FormalNotes {
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         use crate::actions::{MoveEntry, NewFolderIn, NewNoteIn, RenameEntry, RevealEntry, TrashEntry, reveal_label};
         use crate::library::EntryId;
-        use crate::nav::{ENTRY_DRAG, Location, parse_entry};
+        use crate::nav::{ENTRY_DRAG, Location, dragged_entry, parse_entry};
 
         let library = self.store.read(cx).library();
         let selected: SharedString = match (self.switching.as_ref().or(self.open.as_ref()), &self.location) {
@@ -104,8 +104,18 @@ impl super::root::FormalNotes {
                     this.new_note_in(&f, window, cx);
                 }
             }))
+            // A drag resting on a closed folder opens it, as Finder's sidebar does.
+            .on_spring_load(cx.listener(|this, e: &SpringLoaded, _, cx| {
+                let on = e.slot.as_ref().and_then(|s| s.on.as_deref()).and_then(parse_entry);
+                if let Some(EntryId::Folder(f)) = on
+                    && !f.is_root()
+                    && this.expanded.insert(f)
+                {
+                    cx.notify();
+                }
+            }))
             .on_drop(cx.listener(|this, e: &Dropped, _, cx| {
-                let Some(entry) = parse_entry(&e.item.id) else { return };
+                let Some(entry) = dragged_entry(&e.item.id) else { return };
                 // Onto a folder row, or between rows inside a folder; a note row stands for its
                 // folder.
                 let target = e.slot.as_ref().and_then(|slot| slot.on.clone().or_else(|| slot.parent.clone()));
@@ -141,9 +151,10 @@ impl super::root::FormalNotes {
         tree.into_any_element()
     }
 
-    /// The trash, pinned under the tree in the sidebar's footer.
+    /// The trash, pinned under the tree in the sidebar's footer. An entry dropped on it goes to
+    /// the trash.
     pub(super) fn render_trash(&self, cx: &mut Context<Self>) -> AnyElement {
-        use crate::nav::Location;
+        use crate::nav::{ENTRY_DRAG, Location, dragged_entry};
 
         let count = self.store.read(cx).library().trash.len();
         let selected = self.switching.is_none() && self.open.is_none() && self.location == Location::Trash;
@@ -151,7 +162,14 @@ impl super::root::FormalNotes {
             .nodes([trash_node(count)])
             .selected_opt(selected.then(|| TRASH_KEY.into()))
             .fit_rows()
+            .accepts_drops([ENTRY_DRAG])
+            .drops_onto_rows()
             .on_select(cx.listener(|this, _: &SourceSelected, _, cx| this.go(Location::Trash, cx)))
+            .on_drop(cx.listener(|this, e: &Dropped, _, cx| {
+                if let Some(entry) = dragged_entry(&e.item.id).filter(|e| !e.path().is_empty()) {
+                    this.trash(&entry, cx);
+                }
+            }))
             .into_any_element()
     }
 }

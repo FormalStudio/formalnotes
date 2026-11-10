@@ -6,10 +6,10 @@ use formalnotes::actions::{GoBack, NewFolder, NewNote, OpenEntry, OpenPalette};
 use formalnotes::library::{FolderId, NoteId};
 use formalnotes::nav::Location;
 use formalnotes::views::FormalNotes;
-use nd::components::TextAreaProps;
+use nd::components::{SourceTreeProps, TextAreaProps};
 use nd::core::{NodeId, Point, WindowId};
 use nd::prelude::*;
-use nd::test::{Size, TestApp, by_test_id, text};
+use nd::test::{DragPreview, SPRING_LOAD_DELAY, Size, TestApp, by_test_id, text};
 
 const WINDOW: Size = Size { width: 1280., height: 800. };
 
@@ -388,4 +388,167 @@ fn a_new_note_over_an_open_one_crossfades_in() {
 #[nd::test]
 fn under_reduce_motion_a_new_note_over_an_open_one_crossfades_in() {
     new_note_over(true);
+}
+
+/// Drags the card `from` with real drag events, one frame per step, so a spring-loaded folder
+/// opens only when the clock says so.
+struct CardDrag {
+    card: NodeId,
+    start: Point,
+}
+
+impl Rig {
+    fn centre(&mut self, test_id: &str) -> Point {
+        let id = self.id();
+        let b =
+            by_test_id(&mut self.cx, id, test_id).and_then(|n| n.bounds).unwrap_or_else(|| panic!("no `{test_id}`"));
+        Point { x: b.origin.x + b.size.width / 2., y: b.origin.y + b.size.height / 2. }
+    }
+
+    fn lift(&mut self, card: &str) -> CardDrag {
+        let id = self.id();
+        self.cx.backend_mut().set_window_frame(id, nd::core::Rect::new(0., 0., WINDOW.width, WINDOW.height));
+        let start = self.centre(card);
+        let card = by_test_id(&mut self.cx, id, card).expect("the card").id;
+        let drag = CardDrag { card, start };
+        self.drag_step(&drag, GesturePhase::Began, start);
+        drag
+    }
+
+    fn drag_step(&mut self, drag: &CardDrag, phase: GesturePhase, to: Point) {
+        let translation = Point { x: to.x - drag.start.x, y: to.y - drag.start.y };
+        self.cx.events().emitter(drag.card).emit(DragEvent {
+            phase,
+            start: drag.start,
+            position: to,
+            translation,
+            velocity: Point::default(),
+            modifiers: Default::default(),
+        });
+        self.cx.drain_events();
+        self.cx.advance_clock(1. / 60.);
+        self.cx.frame();
+    }
+
+    fn wait(&mut self, seconds: f64) {
+        self.cx.advance_clock(seconds);
+        self.cx.frame();
+        self.cx.drain_events();
+    }
+
+    fn undo_last(&mut self) {
+        let toast = self.view().toasts().last().expect("a toast").id.clone();
+        let id = self.id();
+        let overlay = by_test_id(&mut self.cx, id, "toasts").expect("the toasts").id;
+        self.emit(overlay, ToastActionClicked { id: toast });
+        self.settle();
+    }
+
+    fn has_note(&self, note: &str) -> bool {
+        self.view().store().read(&self.cx).note(&NoteId(note.into())).is_some()
+    }
+}
+
+#[nd::test]
+fn a_card_dropped_on_a_folder_card_moves_in_and_undo_brings_it_back() {
+    let mut rig = open();
+    let folder = rig.centre("card:folder:Journal");
+    let drag = rig.lift("card:note:Ideas.md");
+    rig.drag_step(&drag, GesturePhase::Changed, folder);
+    rig.drag_step(&drag, GesturePhase::Ended, folder);
+    rig.settle();
+    assert!(rig.has_note("Journal/Ideas.md") && !rig.has_note("Ideas.md"), "moved into Journal");
+    assert_eq!(rig.view().location(), &Location::home(), "the page stays");
+    let landed = rig.cx.backend().previews().iter().any(|(_, p)| matches!(p, DragPreview::Land { into: true, .. }));
+    assert!(landed, "the picture shrinks into the folder");
+
+    rig.undo_last();
+    assert!(rig.has_note("Ideas.md") && !rig.has_note("Journal/Ideas.md"), "undo moves it back");
+}
+
+#[nd::test]
+fn a_drag_resting_on_a_folder_card_opens_it_after_the_delay_and_not_before() {
+    let mut rig = open();
+    let folder = rig.centre("card:folder:Journal");
+    let drag = rig.lift("card:note:Ideas.md");
+    rig.drag_step(&drag, GesturePhase::Changed, folder);
+    rig.wait(SPRING_LOAD_DELAY - 0.1);
+    assert_eq!(rig.view().location(), &Location::home(), "not yet");
+    rig.wait(0.15);
+    assert_eq!(rig.view().location(), &Location::Folder(FolderId("Journal".into())), "sprung open");
+    // The folder's page is up; the card it sprang from is on its way out and takes nothing.
+    rig.wait(1. / 60.);
+    rig.drag_step(&drag, GesturePhase::Ended, folder);
+    rig.settle();
+    assert!(rig.has_note("Ideas.md"), "a release over no target leaves it where it was");
+}
+
+#[nd::test]
+fn escape_cancels_a_card_drag_and_the_picture_settles_back() {
+    let mut rig = open();
+    let folder = rig.centre("card:folder:Journal");
+    let drag = rig.lift("card:note:Ideas.md");
+    rig.drag_step(&drag, GesturePhase::Changed, folder);
+    let id = rig.id();
+    rig.cx.dispatch_keystroke(id, &nd::prelude::gpui::Keystroke::parse("escape").unwrap());
+    rig.drag_step(&drag, GesturePhase::Ended, folder);
+    rig.settle();
+    assert!(rig.has_note("Ideas.md"), "nothing moved");
+    assert_eq!(rig.view().location(), &Location::home());
+    let last = rig.cx.backend().previews().iter().rev().find(|(_, p)| !matches!(p, DragPreview::Gone)).map(|(_, p)| *p);
+    assert!(matches!(last, Some(DragPreview::Land { into: false, .. })), "it settles home: {last:?}");
+    assert!(rig.view().toasts().is_empty());
+}
+
+fn sidebar_drop(rig: &mut Rig, list: &str, entry: &str, on: &str) {
+    let id = rig.id();
+    let node = by_test_id(&mut rig.cx, id, list).expect("the list").id;
+    let slot = DropSlot { parent: None, index: 0, on: Some(on.to_owned().into()) };
+    rig.emit(
+        node,
+        Dropped {
+            item: DragItem::new(formalnotes::nav::ENTRY_DRAG, entry.to_owned()),
+            position: Point::default(),
+            local: Point::default(),
+            source_window: id,
+            slot: Some(slot),
+            modifiers: Default::default(),
+        },
+    );
+    rig.settle();
+}
+
+#[nd::test]
+fn a_card_dropped_on_a_sidebar_folder_or_home_moves_there() {
+    let mut rig = open();
+    sidebar_drop(&mut rig, "sidebar", "card:note:Ideas.md", "folder:Projects");
+    assert!(rig.has_note("Projects/Ideas.md"));
+    sidebar_drop(&mut rig, "sidebar", "note:Projects/Ideas.md", "home");
+    assert!(rig.has_note("Ideas.md"), "Home takes it back to the library root");
+}
+
+#[nd::test]
+fn a_drag_resting_on_a_sidebar_folder_expands_it() {
+    let mut rig = open();
+    let id = rig.id();
+    let sidebar = by_test_id(&mut rig.cx, id, "sidebar").expect("the sidebar").id;
+    let expanded = |rig: &Rig| {
+        let props = rig.cx.backend().props(sidebar).and_then(|p| p.downcast_ref::<SourceTreeProps>()).cloned();
+        props.expect("a source tree").nodes.iter().any(|n| n.id == "folder:Projects" && n.expanded)
+    };
+    assert!(!expanded(&rig));
+    let slot = DropSlot { parent: None, index: 0, on: Some("folder:Projects".into()) };
+    let item = DragItem::new(formalnotes::nav::ENTRY_DRAG, "card:note:Ideas.md");
+    rig.emit(sidebar, SpringLoaded { item, slot: Some(slot) });
+    assert!(expanded(&rig));
+}
+
+#[nd::test]
+fn a_card_dropped_on_the_trash_row_goes_to_the_trash_with_undo() {
+    let mut rig = open();
+    sidebar_drop(&mut rig, "sidebar-trash", "card:note:Ideas.md", "trash");
+    assert!(!rig.has_note("Ideas.md"));
+    assert_eq!(rig.view().store().read(&rig.cx).library().trash.len(), 1);
+    rig.undo_last();
+    assert!(rig.has_note("Ideas.md"), "undo puts it back");
 }

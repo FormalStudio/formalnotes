@@ -7,20 +7,24 @@ use nd::prelude::*;
 use super::metrics::*;
 use super::motion;
 use super::root::FormalNotes;
+use crate::nav::ENTRY_DRAG;
 
 impl FormalNotes {
     /// `cards` as (key, face) in the grid `id`, one per page so a page shows its cards at once.
     /// Cards glide on the layout spring when the grid reflows or a card comes or goes before
-    /// them, and a card that leaves fades and shrinks where it stood.
+    /// them, and a card that leaves fades and shrinks where it stood. `draggable` cards drag
+    /// as entries into folders, keeping the page's sort order.
     pub(super) fn grid(
         &self,
         id: impl Into<SharedString>,
         cards: Vec<(SharedString, AnyElement)>,
         gap: f32,
+        draggable: bool,
     ) -> AnyElement {
         let columns = self.region.map_or(4, |(width, _)| card_columns(width - 2. * PAGE_PAD_X, gap));
-        tile_grid(id)
-            .max_columns(columns)
+        let grid = tile_grid(id);
+        let grid = if draggable { grid.draggable_tiles(ENTRY_DRAG).fixed_order() } else { grid };
+        grid.max_columns(columns)
             .min_tile_width(1.)
             .aspect(CARD_ASPECT)
             .gap(gap)
