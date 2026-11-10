@@ -127,7 +127,7 @@ export async function push(c: Ctx) {
 		});
 		return json({ results });
 	} catch (cause) {
-		if (cause instanceof QuotaExceeded) return error(403, "quota", "This account is full: 20000 objects or 200 MB");
+		if (cause instanceof QuotaExceeded) return error(403, "quota", `This account is full: ${MAX_OBJECTS} objects or ${MAX_BYTES / 1_000_000} MB`);
 		throw cause;
 	}
 }
