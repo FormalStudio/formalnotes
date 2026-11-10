@@ -131,18 +131,49 @@ export function bold(body: string, sel: Selection): Edit {
   };
 }
 
-export type LaidLine = { text: string; y: number; height: number };
+export type Block =
+  | { kind: 'text'; start: number; text: string }
+  | { kind: 'task'; start: number; line: number; marker: string; done: boolean; text: string };
 
 /**
- * Where each line of the text starts on screen, from the wrapped lines a text layout reports.
- * A wrapped line that ends in a return closes its text line.
+ * The body as the editor lays it out: each task on its own, the lines between them together.
+ * `start` is where the block begins in the body. There is always at least one block.
  */
-export function lineTops(laid: LaidLine[]): { y: number; height: number }[] {
-  const out: { y: number; height: number }[] = [];
-  let fresh = true;
-  for (const l of laid) {
-    if (fresh) out.push({ y: l.y, height: l.height });
-    fresh = l.text.endsWith('\n');
-  }
+export function blocks(body: string): Block[] {
+  const out: Block[] = [];
+  const found = new Map(tasks(body).map((t) => [t.line, t]));
+  let offset = 0;
+  let open: { start: number; lines: string[] } | null = null;
+  const close = () => {
+    if (open) out.push({ kind: 'text', start: open.start, text: open.lines.join('\n') });
+    open = null;
+  };
+  body.split('\n').forEach((text, line) => {
+    const task = found.get(line);
+    if (task) {
+      close();
+      out.push({ kind: 'task', start: offset, line, marker: text.slice(0, text.length - task.text.length), done: task.done, text: task.text });
+    } else if (open) open.lines.push(text);
+    else open = { start: offset, lines: [text] };
+    offset += text.length + 1;
+  });
+  close();
   return out;
+}
+
+/** The block a place in the body falls in, and where in that block's own text. */
+export function locate(list: Block[], offset: number): { index: number; at: number } {
+  let index = 0;
+  while (index + 1 < list.length && list[index + 1].start <= offset) index++;
+  const b = list[index];
+  const lead = b.kind === 'task' ? b.marker.length : 0;
+  return { index, at: Math.min(Math.max(offset - b.start - lead, 0), b.text.length) };
+}
+
+/** Where the caret rests after typing turned `prev` into `next`: at the end of what changed. */
+export function caretAfter(prev: string, next: string): number {
+  let tail = 0;
+  const most = Math.min(prev.length, next.length);
+  while (tail < most && prev[prev.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+  return next.length - tail;
 }
