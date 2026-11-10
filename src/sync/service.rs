@@ -236,7 +236,8 @@ impl Service {
                 let file = std::fs::read(&path).map_err(|e| format!("The picture could not be read: {e}"))?;
                 let jpeg = picture::square_jpeg(&file).ok_or("That file is not a picture Formal Notes can read.")?;
                 let blob = picture::seal(&session.vault, &jpeg).map_err(|e| e.to_string())?;
-                let version = s.remote.put_avatar(&session.token, &blob).map_err(|e| AccountError::from(e).to_string())?;
+                let version =
+                    s.remote.put_avatar(&session.token, &blob).map_err(|e| AccountError::from(e).to_string())?;
                 Ok(Some(Picture { version, jpeg: jpeg.into() }))
             }),
             Command::RemovePicture => self.picture_task(|s, session| {

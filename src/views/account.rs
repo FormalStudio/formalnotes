@@ -225,42 +225,43 @@ impl AccountPane {
             || "…".to_owned(),
             |u| format!("{}, {}", crate::views::format::items(u.objects as usize), bytes(u.bytes)),
         );
-        let account = form_section()
-            .title("Account")
-            .footer(PRIVACY)
-            .child(
-                form_row("Picture").child(
-                    h_flex()
-                        .gap(theme.spacing.sm)
-                        .items_center()
-                        .child(account_avatar(model, PICTURE_SIZE).id("account-picture"))
-                        .child(button("account-picture-choose", "Choose…").disabled(busy).on_click(cx.listener(
-                            |this, _: &ClickEvent, window, cx| this.choose_picture(window, cx),
-                        )))
-                        .children(model.picture.is_some().then(|| {
-                            button("account-picture-remove", "Remove").disabled(busy).on_click(cx.listener(
-                                |this, _: &ClickEvent, _, cx| this.model.update(cx, |m, _| m.remove_picture()),
+        let account =
+            form_section()
+                .title("Account")
+                .footer(PRIVACY)
+                .child(
+                    form_row("Picture").child(
+                        h_flex()
+                            .gap(theme.spacing.sm)
+                            .items_center()
+                            .child(account_avatar(model, PICTURE_SIZE).id("account-picture"))
+                            .child(button("account-picture-choose", "Choose…").disabled(busy).on_click(
+                                cx.listener(|this, _: &ClickEvent, window, cx| this.choose_picture(window, cx)),
                             ))
-                        })),
-                ),
-            )
-            .child(form_row("Email").child(text(email.to_owned()).text_color(theme.text.secondary)))
-            .child(form_row("Stored").child(text(usage).text_color(theme.text.secondary)))
-            .child(
-                form_row("Last synced").child(
-                    h_flex()
-                        .gap(theme.spacing.sm)
-                        .items_center()
-                        .child(text(Self::last_sync(&model.status)).text_color(theme.text.secondary))
-                        .child(
-                            button("account-sync-now", "Sync now")
-                                .disabled(busy || model.status == Status::Syncing)
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                    this.model.update(cx, |m, _| m.sync_now())
-                                })),
-                        ),
-                ),
-            );
+                            .children(model.picture.is_some().then(|| {
+                                button("account-picture-remove", "Remove").disabled(busy).on_click(cx.listener(
+                                    |this, _: &ClickEvent, _, cx| this.model.update(cx, |m, _| m.remove_picture()),
+                                ))
+                            })),
+                    ),
+                )
+                .child(form_row("Email").child(text(email.to_owned()).text_color(theme.text.secondary)))
+                .child(form_row("Stored").child(text(usage).text_color(theme.text.secondary)))
+                .child(
+                    form_row("Last synced").child(
+                        h_flex()
+                            .gap(theme.spacing.sm)
+                            .items_center()
+                            .child(text(Self::last_sync(&model.status)).text_color(theme.text.secondary))
+                            .child(
+                                button("account-sync-now", "Sync now")
+                                    .disabled(busy || model.status == Status::Syncing)
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                        this.model.update(cx, |m, _| m.sync_now())
+                                    })),
+                            ),
+                    ),
+                );
         let commands = match self.asking {
             None => form_section()
                 .child(form_row("Password").child(

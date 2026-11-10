@@ -13,8 +13,8 @@ use formalnotes::sync::account::{self, AccountError, Keystore};
 use formalnotes::sync::crypto::{self, Key};
 use formalnotes::sync::engine::{Busy, Engine, Report};
 use formalnotes::sync::object::{Kind, Payload};
-use formalnotes::sync::remote::{Fake, Push, Remote};
 use formalnotes::sync::picture::Picture;
+use formalnotes::sync::remote::{Fake, Push, Remote};
 use formalnotes::sync::service::{Command, Event, Service, Status, Task};
 
 struct Device {
@@ -545,7 +545,8 @@ fn pictures(events: &flume::Receiver<Event>) -> Vec<Option<Picture>> {
 #[test]
 fn a_profile_picture_reaches_the_other_device_sealed() {
     let fake = Fake::new();
-    let (lib_a, lib_b, data) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (lib_a, lib_b, data) =
+        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let (mut a, events_a) = service(&fake, lib_a.path(), &data.path().join("a"));
     let (mut b, events_b) = service(&fake, lib_b.path(), &data.path().join("b"));
     a.handle(Command::SignUp { email: "ada@example.com".into(), password: PASSWORD.into() });

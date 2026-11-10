@@ -48,7 +48,8 @@ struct Global(Entity<SyncModel>);
 impl SyncModel {
     /// A model with no sync thread behind it: tests and the appearance audit.
     pub fn idle() -> Self {
-        let view = SyncView { email: None, usage: None, picture: None, status: Status::SignedOut, task: None, failure: None };
+        let view =
+            SyncView { email: None, usage: None, picture: None, status: Status::SignedOut, task: None, failure: None };
         Self { handle: None, view }
     }
 

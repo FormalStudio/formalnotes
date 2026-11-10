@@ -50,7 +50,9 @@ mod tests {
 
     #[test]
     fn a_wide_picture_becomes_its_centre_square() {
-        let wide = image::RgbImage::from_fn(300, 100, |x, _| if (100..200).contains(&x) { [255, 0, 0] } else { [0, 0, 255] }.into());
+        let wide = image::RgbImage::from_fn(300, 100, |x, _| {
+            if (100..200).contains(&x) { [255, 0, 0] } else { [0, 0, 255] }.into()
+        });
         let mut png = Vec::new();
         image::DynamicImage::ImageRgb8(wide).write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
         let jpeg = square_jpeg(&png).unwrap();
