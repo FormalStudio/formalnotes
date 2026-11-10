@@ -24,6 +24,7 @@ ureq = "3.4"
 
 [dev-dependencies]
 nd = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main", features = ["test", "audit"] }
+nd-test = { git = "https://github.com/FormalStudio/NativeDesktop", branch = "main" }
 tempfile = "3"
 
 [build-dependencies]

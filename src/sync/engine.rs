@@ -513,7 +513,7 @@ impl Engine {
         }
         let mut pushes = Vec::new();
         for intent in intents {
-            let (id, push) = match intent {
+            let push = match intent {
                 Intent::Create(path, entry) => {
                     let id = new_id().map_err(|e| io::Error::other(e.to_string()))?;
                     let Some(blob) = self.blob(&id, &path, &entry, report) else { continue };
@@ -528,22 +528,21 @@ impl Engine {
                             sent: Some(Sent { path, hash: entry.hash, deleted: false }),
                         },
                     );
-                    (id.clone(), Push { id, base: 0, deleted: false, blob: Some(blob) })
+                    Push { id, base: 0, deleted: false, blob: Some(blob) }
                 }
                 Intent::Update(id, entry) => {
                     let Some(path) = self.state.objects.get(&id).map(|t| t.path.clone()) else { continue };
                     let Some(blob) = self.blob(&id, &path, &entry, report) else { continue };
                     let Some(t) = self.state.objects.get_mut(&id) else { continue };
                     t.sent = Some(Sent { path, hash: entry.hash, deleted: false });
-                    (id.clone(), Push { id, base: t.seq, deleted: false, blob: Some(blob) })
+                    Push { id, base: t.seq, deleted: false, blob: Some(blob) }
                 }
                 Intent::Delete(id) => {
                     let Some(t) = self.state.objects.get_mut(&id) else { continue };
                     t.sent = Some(Sent { path: t.path.clone(), hash: String::new(), deleted: true });
-                    (id.clone(), Push { id, base: t.seq, deleted: true, blob: None })
+                    Push { id, base: t.seq, deleted: true, blob: None }
                 }
             };
-            let _ = id;
             pushes.push(push);
         }
         if pushes.is_empty() {

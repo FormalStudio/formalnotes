@@ -7,6 +7,8 @@ use nd::prelude::*;
 
 use crate::sync::{Status, SyncModel, SyncView, Task};
 
+const PRIVACY: &str = "Notes are encrypted on this device before they sync. A forgotten password cannot be reset.";
+
 /// What the pane is asking for under the account rows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Asking {
@@ -134,7 +136,7 @@ impl AccountPane {
         let field_w = px(260.);
         let section = form_section()
             .title("Account")
-            .footer("Notes are encrypted on this device before they sync. A forgotten password cannot be reset.")
+            .footer(PRIVACY)
             .child(form_row("Email").child(
                 text_field("account-email").bind(&self.email).label("Email").placeholder("name@example.com").w(field_w),
             ))
@@ -193,7 +195,7 @@ impl AccountPane {
         );
         let account = form_section()
             .title("Account")
-            .footer("Notes are encrypted on this device before they sync. A forgotten password cannot be reset.")
+            .footer(PRIVACY)
             .child(form_row("Email").child(text(email.to_owned()).text_color(theme.text.secondary)))
             .child(form_row("Stored").child(text(usage).text_color(theme.text.secondary)))
             .child(

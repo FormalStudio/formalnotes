@@ -521,3 +521,61 @@ fn the_service_signs_up_syncs_and_signs_out() {
     assert!(seen.contains(&Event::SignedOut), "{seen:?}");
     assert!(lib.path().join("Hello.md").exists(), "local notes stay");
 }
+
+/// The real server: a throwaway account, two libraries standing in for two devices, deleted at
+/// the end. `cargo test --test sync live -- --ignored`, against `FORMALNOTES_SYNC_URL` or the
+/// default server.
+#[test]
+#[ignore = "talks to the real server"]
+fn live_round_trip() {
+    use formalnotes::sync::remote::{Http, base_url, healthy};
+    let url = base_url();
+    assert!(healthy(&url), "{url} does not answer /health");
+    let remote: Arc<dyn Remote> = Arc::new(Http::new(url));
+    let email = format!("roundtrip-{}@example.com", &crypto::new_id().unwrap()[..8]);
+    let (one, two) = (Memory::default(), Memory::default());
+    let session = account::sign_up(&*remote, &one, &email, PASSWORD).unwrap();
+    let other = account::sign_in(&*remote, &two, &email, PASSWORD).unwrap();
+    assert_eq!(other.vault, session.vault);
+
+    let device = |s: &account::Session| {
+        let dir = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let engine = Engine::new(
+            dir.path().to_owned(),
+            remote.clone(),
+            s.token.clone(),
+            s.vault,
+            data.path().join("s.json"),
+            Busy::default(),
+        )
+        .unwrap();
+        Device { dir, _data: data, engine, busy: Busy::default() }
+    };
+    let (mut a, mut b) = (device(&session), device(&other));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        a.write("Journal/Slow start.md", "# Slow start\n\nCoffee, then café.\n");
+        a.write("Journal/.folder.json", "{\"v\":1,\"view\":\"table\"}");
+        a.sync();
+        b.sync();
+        assert_eq!(b.read("Journal/Slow start.md").unwrap(), "# Slow start\n\nCoffee, then café.\n");
+        b.write("Journal/Slow start.md", "edited on b");
+        fs::rename(b.path("Journal"), b.path("Diary")).unwrap();
+        b.sync();
+        a.sync();
+        assert_eq!(a.read("Diary/Slow start.md").unwrap(), "edited on b");
+        a.write("Diary/Slow start.md", "from a");
+        b.write("Diary/Slow start.md", "from b");
+        a.sync();
+        assert_eq!(b.sync().conflicts, 1);
+        a.sync();
+        assert_eq!(a.files(), b.files());
+        let usage = remote.usage(&session.token).unwrap();
+        assert_eq!(usage.objects, 4, "{usage:?}");
+    }));
+    account::delete_account(&*remote, &one, &session, PASSWORD).unwrap();
+    assert!(remote.usage(&session.token).is_err(), "the account is gone");
+    if let Err(panic) = result {
+        std::panic::resume_unwind(panic);
+    }
+}
