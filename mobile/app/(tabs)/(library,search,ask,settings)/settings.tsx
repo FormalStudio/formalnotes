@@ -10,6 +10,7 @@ import { askName } from '@/lib/app/prompt';
 import { sync, useSync, type SyncState } from '@/lib/app/sync';
 import { DEFAULTS, type Provider } from '@/lib/ai/ask';
 import { haptic } from '@/lib/haptics';
+import { colors } from '@/lib/ui/colors';
 import { relative } from '@/lib/library/model';
 
 function syncLine(s: SyncState, now: number): string {
@@ -23,6 +24,11 @@ function signOut() {
     { text: 'Cancel', style: 'cancel' },
     { text: 'Sign out', style: 'destructive', onPress: () => void sync.signOut() },
   ]);
+}
+
+/** A row's current value, on its trailing edge. */
+function value(text: string) {
+  return <Text textStyle={{ color: colors.secondary as string }}>{text}</Text>;
 }
 
 export default function Settings() {
@@ -57,12 +63,13 @@ export default function Settings() {
           </FieldGroup.Section>
         ) : null}
 
-        <FieldGroup.Section title="Account">
+        <FieldGroup.Section title={account.email ? undefined : 'Account'}>
           {account.email ? (
             <>
               <ListItem onPress={() => void sync.syncNow()}>Sync now</ListItem>
               <ListItem onPress={() => router.push('/password')}>Change password</ListItem>
               <ListItem onPress={signOut}>Sign out</ListItem>
+              <ListItem onPress={() => router.push('/delete-account')}>Delete account</ListItem>
             </>
           ) : (
             <>
@@ -99,17 +106,17 @@ export default function Settings() {
             Provider
           </ListItem>
           {computer ? null : (
-            <ListItem supportingText={settings.model} onPress={() => void edit('Model', settings.model, (model) => ai.update({ model }))}>
+            <ListItem trailing={value(settings.model)} onPress={() => void edit('Model', settings.model, (model) => ai.update({ model }))}>
               Model
             </ListItem>
           )}
           <ListItem
-            supportingText={settings.baseUrl || 'Not set'}
+            trailing={value(settings.baseUrl.replace(/^https?:\/\//, '') || 'Not set')}
             onPress={() => void edit(computer ? 'Address' : 'Base URL', settings.baseUrl, (baseUrl) => ai.update({ baseUrl }))}
           >
             {computer ? 'Address' : 'Base URL'}
           </ListItem>
-          <ListItem supportingText={hasKey ? 'Saved in the keychain' : 'Not set'} onPress={() => void setKey()}>
+          <ListItem trailing={value(hasKey ? 'Saved' : 'Not set')} onPress={() => void setKey()}>
             {computer ? 'Access code' : 'API key'}
           </ListItem>
           {!computer && (settings.model !== DEFAULTS[settings.provider].model || settings.baseUrl !== DEFAULTS[settings.provider].baseUrl) ? (
@@ -124,18 +131,8 @@ export default function Settings() {
           </FieldGroup.SectionFooter>
         </FieldGroup.Section>
 
-        <FieldGroup.Section title="Appearance">
-          <ListItem supportingText="Light and dark follow the system.">Theme</ListItem>
-        </FieldGroup.Section>
-
-        {account.email ? (
-          <FieldGroup.Section>
-            <ListItem onPress={() => router.push('/delete-account')}>Delete account</ListItem>
-          </FieldGroup.Section>
-        ) : null}
-
         <FieldGroup.Section>
-          <ListItem supportingText={`Version ${Constants.expoConfig?.version ?? ''}`}>Formal Notes</ListItem>
+          <ListItem trailing={value(Constants.expoConfig?.version ?? '')}>Version</ListItem>
         </FieldGroup.Section>
       </FieldGroup>
     </Host>
