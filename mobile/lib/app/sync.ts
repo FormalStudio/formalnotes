@@ -196,7 +196,10 @@ export function accountError(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.code === 'invalid_email_or_password' || e.status === 401) return 'That email and password do not match.';
     if (e.code === 'wrong_password') return 'That password is wrong.';
-    if (e.code === 'user_already_exists' || e.code.includes('already')) return 'An account with that email exists. Sign in instead.';
+    if (e.code === 'user_already_exists_use_another_email' || e.code.includes('already')) return 'An account with that email exists. Sign in instead.';
+    if (e.code === 'quota') return 'Your account is full. Delete some notes to sync more.';
+    if (e.code === 'too_large') return 'A note is too large to sync.';
+    if (e.code === 'password_too_short') return 'That password is too short.';
     if (e.code === 'rate_limited') return 'Too many attempts. Try again in a minute.';
     return e.message;
   }

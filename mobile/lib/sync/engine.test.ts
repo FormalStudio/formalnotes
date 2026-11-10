@@ -242,4 +242,38 @@ describe('sync engine', () => {
     expect(view.columns[0].name).toBe('status');
     expect(view.raw.extra).toBe(1);
   });
+
+  test('a base above 0 for an unknown id answers conflict at seq 0, deleted', async () => {
+    const token = await account();
+    const api = new Api(server.fetch, 'https://notes.test', token);
+    const id = uuid();
+    const blob = await crypto.sealObject(vaultKey, id, { v: 1, kind: 'note', path: 'A.md', text: 'a', created: 1, modified: 1 });
+    const [result] = await api.push([{ id, base: 4, deleted: false, blob }]);
+    expect(result).toEqual({ id, status: 'conflict', seq: 0, deleted: true, blob: null });
+  });
+
+  test('a too large blob rejects the whole push and keeps nothing', async () => {
+    const token = await account();
+    const a = device(token);
+    a.lib.createNote('', 'x'.repeat(1024 * 1024 + 1));
+    a.lib.createNote('', 'small');
+    const error = await a.sync().catch((e) => e);
+    expect(error).toMatchObject({ status: 413, code: 'too_large' });
+    expect([...server.users.values()][0].objects.size).toBe(0);
+  });
+
+  test('sign-up and sign-in errors carry the lowercased Better Auth code', async () => {
+    const api = new Api(server.fetch);
+    await api.signUp('ada@example.com', 'a'.repeat(43));
+    expect(await api.signUp('ada@example.com', 'b'.repeat(43)).catch((e) => e.code)).toBe('user_already_exists_use_another_email');
+    expect(await api.signUp('bob@example.com', 'short').catch((e) => e.code)).toBe('password_too_short');
+    expect(await api.signIn('ada@example.com', 'c'.repeat(43)).catch((e) => e.code)).toBe('invalid_email_or_password');
+  });
+
+  test('wrong_password from the password and delete routes', async () => {
+    const token = await account();
+    const api = new Api(server.fetch, 'https://notes.test', token);
+    expect(await api.changePassword('x'.repeat(43), 'y'.repeat(43), 'k').catch((e) => e.status + e.code)).toBe('403wrong_password');
+    expect(await api.deleteAccount('x'.repeat(43)).catch((e) => e.status + e.code)).toBe('403wrong_password');
+  });
 });

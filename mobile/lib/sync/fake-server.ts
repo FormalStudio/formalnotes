@@ -9,6 +9,13 @@ type User = { id: string; email: string; password: string; wrapped: string | nul
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PASSWORD = /^[A-Za-z0-9_-]{43}$/;
+const MAX_BLOB = 1024 * 1024;
+const MAX_OBJECTS = 20000;
+const MAX_BYTES = 200_000_000;
+
+function decodedLength(blob: string): number {
+  return Math.floor((blob.length * 3) / 4) - (blob.endsWith('==') ? 2 : blob.endsWith('=') ? 1 : 0);
+}
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return Response.json(body, { status, headers });
@@ -16,6 +23,12 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 
 function error(status: number, code: string, message = code): Response {
   return json({ error: code, message }, status);
+}
+
+function bytesOf(user: { objects: Map<string, StoredObject> }): number {
+  let n = 0;
+  for (const o of user.objects.values()) if (!o.deleted && o.blob) n += decodedLength(o.blob);
+  return n;
 }
 
 export class FakeServer {
@@ -41,6 +54,17 @@ export class FakeServer {
     return response;
   };
 
+  /** Whether the taken changes would push the account over its object or byte limit. */
+  private wouldExceed(user: User, changes: { id: string; base: number; deleted: boolean; blob?: string | null }[]): boolean {
+    const next = new Map(user.objects);
+    for (const c of changes) {
+      if ((next.get(c.id)?.seq ?? 0) !== c.base) continue;
+      next.set(c.id, { seq: 0, deleted: c.deleted, blob: c.deleted ? null : c.blob! });
+    }
+    const live = [...next.values()].filter((o) => !o.deleted);
+    return live.length > MAX_OBJECTS || bytesOf({ objects: next }) > MAX_BYTES;
+  }
+
   private session(user: User): Response {
     const token = `token-${this.nextToken++}`;
     this.tokens.set(token, user);
@@ -52,7 +76,7 @@ export class FakeServer {
     if (path === '/health') return json({ ok: true });
     if (method === 'POST' && path === '/api/auth/sign-up/email') {
       if (!PASSWORD.test(body?.password ?? '')) return error(400, 'password_too_short');
-      if (this.users.has(body.email.toLowerCase())) return error(422, 'user_already_exists');
+      if (this.users.has(body.email.toLowerCase())) return error(422, 'user_already_exists_use_another_email');
       const created: User = {
         id: `user-${this.users.size + 1}`,
         email: body.email.toLowerCase(),
@@ -78,7 +102,7 @@ export class FakeServer {
 
     if (method === 'GET' && path === '/v1/account') {
       const live = [...user.objects.values()].filter((o) => !o.deleted);
-      return json({ email: user.email, objects: live.length, bytes: live.reduce((n, o) => n + (o.blob?.length ?? 0), 0) });
+      return json({ email: user.email, objects: live.length, bytes: bytesOf(user) });
     }
     if (method === 'GET' && path === '/v1/keys') {
       return user.wrapped ? json({ wrappedVaultKey: user.wrapped }) : error(404, 'no_keys');
@@ -90,6 +114,7 @@ export class FakeServer {
     }
     if (method === 'POST' && path === '/v1/account/password') {
       if (body.currentPassword !== user.password) return error(403, 'wrong_password');
+      if (!PASSWORD.test(body.newPassword ?? '')) return error(400, 'password_too_short');
       user.password = body.newPassword;
       user.wrapped = body.wrappedVaultKey;
       return new Response(null, { status: 204 });
@@ -121,6 +146,8 @@ export class FakeServer {
         if (!UUID_V4.test(c.id) || (!c.deleted && typeof c.blob !== 'string')) return error(400, 'bad_request');
         if (!c.deleted && atob(c.blob!).charCodeAt(0) !== 1) return error(400, 'bad_request');
       }
+      if (changes.some((c) => c.blob && decodedLength(c.blob) > MAX_BLOB)) return error(413, 'too_large');
+      if (this.wouldExceed(user, changes)) return error(403, 'quota');
       const results = changes.map((c) => {
         const now = user.objects.get(c.id);
         if ((now?.seq ?? 0) !== c.base) {
