@@ -268,6 +268,16 @@ async function server() {
 		const account = await call("/v1/account", { token });
 		same("GET /v1/account counts live objects", [account.body?.email, account.body?.objects], [email, 12]);
 
+		// The profile picture: one device seals and puts it, the other learns the version and opens it.
+		const picture = crypto.getRandomValues(new Uint8Array(20000));
+		const put = await call("/v1/avatar", { method: "PUT", token, body: { blob: base64(await seal(vaultKey, picture, "avatar")) } });
+		same("put the picture: 200", put.status, 200);
+		same("the account reports its version", (await call("/v1/account", { token: token2 })).body?.avatar, put.body?.avatar);
+		const got = await call("/v1/avatar", { token: token2 });
+		same("the other device opens the picture", hex(await open(vaultKey, fromBase64(got.body.blob), "avatar")), hex(picture));
+		same("remove the picture: 204", (await call("/v1/avatar", { method: "DELETE", token })).status, 204);
+		same("no picture: 404 no_avatar", (await call("/v1/avatar", { token })).body?.error, "no_avatar");
+
 		// Changing the password re-wraps the vault key and ends the other session.
 		const newPassword = `roundtrip ${crypto.randomUUID()}`;
 		const newKeys = await deriveKeys(email, newPassword);

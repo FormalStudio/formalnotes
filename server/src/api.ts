@@ -19,6 +19,15 @@ const wrappedVaultKey = z
 	.transform((text) => decodeBase64(text))
 	.refine((bytes): bytes is Uint8Array => bytes !== null && bytes.length === WRAPPED_KEY_LENGTH && isSealed(bytes), "Expected a sealed vault key");
 
+/** A sealed 512 pixel JPEG is a few tens of kilobytes; this leaves room and still bounds the row. */
+export const MAX_AVATAR = 262144;
+
+const avatarInput = z.object({
+	blob: z
+		.string()
+		.transform((text) => decodeBase64(text))
+		.refine((bytes): bytes is Uint8Array => bytes !== null && isSealed(bytes), "Expected a sealed picture"),
+});
 const keysInput = z.object({ wrappedVaultKey });
 const passwordInput = z.object({ currentPassword: password, newPassword: password, wrappedVaultKey });
 const deleteInput = z.object({ password });
@@ -48,12 +57,41 @@ api.get("/account", async (c) => {
 	const userId = c.get("userId");
 	const [row] = await c
 		.get("db")
-		.select({ email: schema.user.email, objects: schema.counter.objects, bytes: schema.counter.bytes })
+		.select({ email: schema.user.email, objects: schema.counter.objects, bytes: schema.counter.bytes, avatar: schema.avatar.updatedAt })
 		.from(schema.user)
 		.leftJoin(schema.counter, eq(schema.counter.userId, schema.user.id))
+		.leftJoin(schema.avatar, eq(schema.avatar.userId, schema.user.id))
 		.where(eq(schema.user.id, userId));
 	if (!row) return error(401, "unauthorized", "Sign in again");
-	return json({ email: row.email, objects: row.objects ?? 0, bytes: row.bytes ?? 0 });
+	return json({ email: row.email, objects: row.objects ?? 0, bytes: row.bytes ?? 0, avatar: row.avatar?.getTime() ?? null });
+});
+
+api.get("/avatar", async (c) => {
+	const [row] = await c
+		.get("db")
+		.select({ blob: schema.avatar.blob, updatedAt: schema.avatar.updatedAt })
+		.from(schema.avatar)
+		.where(eq(schema.avatar.userId, c.get("userId")));
+	if (!row) return error(404, "no_avatar", "This account has no picture");
+	return json({ avatar: row.updatedAt.getTime(), blob: encodeBase64(row.blob) });
+});
+
+api.put("/avatar", async (c) => {
+	const input = await parse(c, avatarInput);
+	if (input instanceof Response) return input;
+	if (input.blob.length > MAX_AVATAR) return error(413, "too_large", "A picture is at most 256 KiB");
+	const now = new Date();
+	await c
+		.get("db")
+		.insert(schema.avatar)
+		.values({ userId: c.get("userId"), blob: input.blob, updatedAt: now })
+		.onConflictDoUpdate({ target: schema.avatar.userId, set: { blob: input.blob, updatedAt: now } });
+	return json({ avatar: now.getTime() });
+});
+
+api.delete("/avatar", async (c) => {
+	await c.get("db").delete(schema.avatar).where(eq(schema.avatar.userId, c.get("userId")));
+	return noContent();
 });
 
 api.get("/keys", async (c) => {

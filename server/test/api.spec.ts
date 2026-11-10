@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { encodeBase64 } from "../src/base64";
 import { createDb, schema } from "../src/db";
+import { MAX_AVATAR } from "../src/api";
 import { MAX_BLOB, MAX_BYTES, MAX_OBJECTS } from "../src/sync";
 
 const base = "https://notes.example";
@@ -110,7 +111,7 @@ describe("accounts", () => {
 		const user = await signUp();
 		expect(user.token).toBeTruthy();
 		const account = await request("/v1/account", { token: user.token });
-		expect(await account.json()).toEqual({ email: user.email, objects: 0, bytes: 0 });
+		expect(await account.json()).toEqual({ email: user.email, objects: 0, bytes: 0, avatar: null });
 
 		const again = await signIn(user.email, user.password);
 		expect(again.status).toBe(200);
@@ -163,6 +164,9 @@ describe("auth guard", () => {
 		["PUT", "/v1/keys"],
 		["POST", "/v1/account/password"],
 		["DELETE", "/v1/account"],
+		["GET", "/v1/avatar"],
+		["PUT", "/v1/avatar"],
+		["DELETE", "/v1/avatar"],
 		["GET", "/v1/sync?since=0"],
 		["POST", "/v1/sync"],
 	];
@@ -230,7 +234,7 @@ describe("sync", () => {
 		const since2 = await pull(user, 2);
 		expect(since2).toEqual({ changes: [{ id: a, seq: 3, deleted: false, blob: edited }], cursor: 3, more: false });
 		expect(await pull(user, 3)).toEqual({ changes: [], cursor: 3, more: false });
-		expect(await (await request("/v1/account", { token: user.token })).json()).toEqual({ email: user.email, objects: 2, bytes: 3072 });
+		expect(await (await request("/v1/account", { token: user.token })).json()).toEqual({ email: user.email, objects: 2, bytes: 3072, avatar: null });
 	});
 
 	it("keeps the taken changes of a request when others in it conflict", async () => {
@@ -382,6 +386,41 @@ describe("sync", () => {
 	});
 });
 
+describe("profile picture", () => {
+	it("keeps one sealed picture per account and reports its version", async () => {
+		const user = await signUp();
+		const other = await signUp();
+		expect(await (await request("/v1/account", { token: user.token })).json()).toMatchObject({ avatar: null });
+		expect(await (await request("/v1/avatar", { token: user.token })).json()).toMatchObject({ error: "no_avatar" });
+
+		const first = sealed(4096);
+		const put = await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: first } });
+		expect(put.status).toBe(200);
+		const { avatar } = (await put.json()) as { avatar: number };
+		expect(await (await request("/v1/account", { token: user.token })).json()).toMatchObject({ avatar });
+		expect(await (await request("/v1/avatar", { token: user.token })).json()).toEqual({ avatar, blob: first });
+		expect((await request("/v1/avatar", { token: other.token })).status).toBe(404);
+
+		const second = sealed(2048);
+		await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: second } });
+		expect(await (await request("/v1/avatar", { token: user.token })).json()).toMatchObject({ blob: second });
+
+		expect((await request("/v1/avatar", { method: "DELETE", token: user.token })).status).toBe(204);
+		expect((await request("/v1/avatar", { token: user.token })).status).toBe(404);
+		expect(await (await request("/v1/account", { token: user.token })).json()).toMatchObject({ avatar: null });
+	});
+
+	it("refuses a picture that is not sealed or is over the limit", async () => {
+		const user = await signUp();
+		const notSealed = await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: encodeBase64(new Uint8Array(64)) } });
+		expect(notSealed.status).toBe(400);
+		const big = await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: sealed(MAX_AVATAR + 1) } });
+		expect(big.status).toBe(413);
+		expect(await big.json()).toMatchObject({ error: "too_large" });
+		expect((await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: sealed(MAX_AVATAR) } })).status).toBe(200);
+	});
+});
+
 describe("password change", () => {
 	it("re-wraps the vault key and ends every other session", async () => {
 		const user = await signUp();
@@ -410,6 +449,7 @@ describe("account deletion", () => {
 		const bystander = await signUp();
 		await request("/v1/keys", { method: "PUT", token: user.token, json: { wrappedVaultKey: wrappedKey() } });
 		await pushOk(user, [{ id: crypto.randomUUID(), base: 0, blob: sealed(100) }]);
+		await request("/v1/avatar", { method: "PUT", token: user.token, json: { blob: sealed(100) } });
 		await pushOk(bystander, [{ id: crypto.randomUUID(), base: 0, blob: sealed(100) }]);
 
 		const wrong = await request("/v1/account", { method: "DELETE", token: user.token, json: { password: password() } });
@@ -419,7 +459,7 @@ describe("account deletion", () => {
 		expect((await request("/v1/account", { token: user.token })).status).toBe(401);
 		expect((await signIn(user.email, user.password)).status).toBe(401);
 
-		for (const table of [schema.session, schema.account, schema.vaultKey, schema.counter, schema.object]) {
+		for (const table of [schema.session, schema.account, schema.vaultKey, schema.counter, schema.object, schema.avatar]) {
 			expect(await db.select().from(table).where(eq(table.userId, user.id))).toEqual([]);
 		}
 		expect(await db.select().from(schema.user).where(eq(schema.user.id, user.id))).toEqual([]);

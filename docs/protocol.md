@@ -123,11 +123,14 @@ Account, through Better Auth with the bearer plugin (the session token is the
 
 | Route | Body | Result |
 | --- | --- | --- |
-| `GET /v1/account` | | `{ email, objects, bytes }`: live objects and stored bytes |
+| `GET /v1/account` | | `{ email, objects, bytes, avatar }`: live objects, stored bytes, the picture's version or `null` |
 | `GET /v1/keys` | | `{ wrappedVaultKey }`, or `404 no_keys` |
 | `PUT /v1/keys` | `{ wrappedVaultKey }` | `204`; `409 keys_exist` once set |
 | `POST /v1/account/password` | `{ currentPassword, newPassword, wrappedVaultKey }` | `204`; other sessions end |
 | `DELETE /v1/account` | `{ password }` | `204`; the user, sessions, keys and objects are gone |
+| `GET /v1/avatar` | | `{ avatar, blob }`, or `404 no_avatar` |
+| `PUT /v1/avatar` | `{ blob }` | `{ avatar }`, the new version |
+| `DELETE /v1/avatar` | | `204` |
 | `GET /v1/sync?since=<seq>&limit=<n>` | | `{ changes, cursor, more }` |
 | `POST /v1/sync` | `{ changes }` | `{ results }` |
 | `GET /health` | | `{ ok: true }`, no auth |
@@ -135,6 +138,14 @@ Account, through Better Auth with the bearer plugin (the session token is the
 Sign-up is two calls: `sign-up/email`, then `PUT /v1/keys`. Sign-in is `sign-in/email`, then
 `GET /v1/keys` and unwrap. An account whose `GET /v1/keys` answers `no_keys` (sign-up was cut
 short) makes a vault key and puts it.
+
+**Profile picture.** `blob` is `seal(vaultKey, jpeg, aad = "avatar")`, where `jpeg` is a square
+JPEG 512 pixels across, at most 262144 bytes sealed (`413 too_large`). The server cannot open
+it. `avatar` is the Unix milliseconds of the last upload: a device keeps the opened picture
+with that number and fetches again when `GET /v1/account` reports another. An account without
+a picture shows the first letter of its email on a gradient picked from the email: the
+FNV-1a 64 hash `h` of the email's UTF-8 gives a first hue of `h mod 360` degrees and a second
+`30 + (h >> 16) mod 31` degrees further round the wheel.
 
 **Pull.** Every account has a counter. Each accepted change takes the next value as the
 object's `seq`. `GET /v1/sync?since=0` returns every object; `since=<cursor>` returns the

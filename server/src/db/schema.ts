@@ -73,6 +73,15 @@ export const vaultKey = pgTable("vault_key", {
 	updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** The profile picture, sealed under the vault key like an object. The server cannot open it. */
+export const avatar = pgTable("avatar", {
+	userId: text("user_id")
+		.primaryKey()
+		.references(() => user.id, { onDelete: "cascade" }),
+	blob: bytea("blob").notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 /**
  * One row per user. A push locks it, so `seq` hands out gapless values in commit order, and keeps the live
  * totals the quota checks against.
