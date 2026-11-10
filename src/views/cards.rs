@@ -180,6 +180,8 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
     div()
         .size_full()
         .relative()
+        // Draws nothing on its own: a note closing into the folder takes these corners.
+        .rounded(px(FOLDER_RADIUS))
         // The back plate and its tab, edge to edge: the plate's top-left corner is square
         // under the tab.
         .child(

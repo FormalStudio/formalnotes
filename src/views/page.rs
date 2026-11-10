@@ -10,12 +10,13 @@ use super::motion;
 use super::root::FormalNotes;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
-use crate::nav::{Location, card_id, entry_key, folder_key, frame_id};
+use crate::nav::{Location, card_id, entry_key, face_id, folder_key, frame_id};
 use crate::settings::{NotesSettings, SortOrder};
 
 impl FormalNotes {
     /// The page for the location, keyed by it: a new page rises in as the one it replaces fades
-    /// out where it stood, so Home, folders and the trash cross over rather than cut.
+    /// out where it stood, so Home, folders and the trash cross over rather than cut. Under a
+    /// closing note it only fades in, so the card the note goes back into holds still.
     pub(super) fn render_page(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let (key, page) = match self.location.clone() {
             Location::Folder(folder) => (format!("page:{}", folder_key(&folder)), self.folder_page(&folder, cx)),
@@ -23,11 +24,12 @@ impl FormalNotes {
         };
         // The window opens with its page in place: only a page after the first comes in.
         let shown = self.region.is_some();
+        let rise = if self.presented.is_closing() { 0. } else { motion::PAGE_RISE };
         div()
             .id(key)
             .size_full()
             .animate(motion::layout())
-            .when(shown, |d| d.enter_from(|p| p.opacity(0.).offset(px(0.), px(motion::PAGE_RISE))))
+            .when(shown, |d| d.enter_from(move |p| p.opacity(0.).offset(px(0.), px(rise))))
             .exit_to(|p| p.opacity(0.))
             .child(page)
             .into_any_element()
@@ -134,7 +136,7 @@ impl FormalNotes {
         let id = card_id(&entry);
         let hover_id = id.clone();
         let face = face
-            .id(format!("face:{}", entry_key(&entry)))
+            .id(face_id(&entry))
             .group(GROUP)
             .size_full()
             .active(|p| p.scale(0.98))

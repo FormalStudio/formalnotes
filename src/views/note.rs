@@ -2,8 +2,10 @@
 //! note's card to fill the content region, from the card's ring and corners to the page's
 //! flat surface, carrying the card's title and preview at their size while they fade out, and
 //! the path and the editor, laid out at full size, fade in as it grows. Closing plays it back
-//! into the card. When the card is not on screen the sheet rises in instead. Opening another
-//! note while one is open crossfades the text.
+//! into the card, or, on a page without it (Home, say), shrinks into the card of the folder
+//! holding the note while the editor fades as it lands. When neither is on screen the sheet
+//! rises in instead, and closing fades it out where it is. Opening another note while one is
+//! open crossfades the text.
 
 use nd::prelude::*;
 
@@ -13,7 +15,7 @@ use super::motion;
 use super::root::FormalNotes;
 use crate::actions::GoBack;
 use crate::library::{EntryId, FolderId};
-use crate::nav::{Location, folder_key, frame_id};
+use crate::nav::{Location, face_id, folder_key, frame_id};
 
 impl FormalNotes {
     pub(super) fn render_note(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -24,6 +26,9 @@ impl FormalNotes {
             .and_then(|id| self.store.read(cx).note(id))
             .map(|n| cards::note_page(&theme, &n.title, &n.text).hero_content());
         let source = self.shown.as_ref().map(|id| frame_id(&EntryId::Note(id.clone()))).unwrap_or_default();
+        // On a page without the note's card, it goes back into the card of the folder holding
+        // it there, nearest first.
+        let folders = self.shown.as_ref().map(|id| id.folder().ancestry()).unwrap_or_default();
         let switching = self.switching.is_some();
         let content = v_flex()
             .id("note-content")
@@ -48,6 +53,7 @@ impl FormalNotes {
                 None => d.size_full(),
             })
             .hero_with(&self.presented, source)
+            .map(|d| folders.iter().rev().fold(d, |d, f| d.hero_fallback(face_id(&EntryId::Folder(f.clone())))))
             .children(card)
             .child(page);
         div().id("note").size_full().relative().child(sheet).into_any_element()

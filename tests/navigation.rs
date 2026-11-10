@@ -389,3 +389,78 @@ fn a_new_note_over_an_open_one_crossfades_in() {
 fn under_reduce_motion_a_new_note_over_an_open_one_crossfades_in() {
     new_note_over(true);
 }
+
+/// Where the presented note's sheet stands in the window this frame, and how wide it is.
+fn sheet(rig: &mut Rig) -> Option<(f32, f32, f32)> {
+    let paper = node_now(rig, "note-paper")?;
+    let props = div_props(rig, "note-paper")?;
+    let frame = rig.cx.backend().window_frame_of(paper)?;
+    let (dx, dy) = props.transform.offset;
+    Some((frame.origin.x + dx, frame.origin.y + dy, frame.size.width))
+}
+
+fn window_frame(rig: &mut Rig, test_id: &str) -> nd::core::Rect {
+    let node = node_now(rig, test_id).unwrap_or_else(|| panic!("no `{test_id}`"));
+    rig.cx.backend().window_frame_of(node).expect("laid out")
+}
+
+/// Leaves Journal/Monday by `leave` and records where the sheet stands each frame until it
+/// is gone, with the frame its card had while the note was open.
+fn leave_note(leave: impl FnOnce(&mut Rig)) -> (Rig, nd::core::Rect, Vec<(f32, f32, f32)>) {
+    let mut rig = open();
+    rig.act(&OpenEntry("folder:Journal".into()));
+    let card = window_frame(&mut rig, "frame:note:Journal/Monday.md");
+    rig.act(&OpenEntry("note:Journal/Monday.md".into()));
+    leave(&mut rig);
+    let mut shots = Vec::new();
+    for _ in 0..600 {
+        step(&mut rig, 1. / 60.);
+        match sheet(&mut rig) {
+            Some(s) => shots.push(s),
+            None => break,
+        }
+    }
+    (rig, card, shots)
+}
+
+fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() < 1.
+}
+
+#[nd::test]
+fn a_note_left_for_home_shrinks_into_its_folders_card() {
+    let (mut rig, card, shots) = leave_note(|rig| {
+        let crumb = node_now(rig, "note-crumb:home").expect("Home in the note's path");
+        rig.cx.events().emitter(crumb).emit(TapEvent::new(Point { x: 4., y: 4. }, 1));
+    });
+    assert_eq!(rig.view().location(), &Location::home());
+    let on_card =
+        shots.iter().any(|&(x, y, w)| near(x, card.origin.x) && near(y, card.origin.y) && near(w, card.size.width));
+    assert!(!on_card, "never lands where the card stood in the folder: {card:?} {shots:?}");
+    let folder = window_frame(&mut rig, "face:folder:Journal");
+    let &(x, y, w) =
+        shots.iter().rev().find(|s| s.2 < folder.size.width + 1.).unwrap_or_else(|| panic!("{folder:?} {shots:?}"));
+    assert!(near(x, folder.origin.x) && near(y, folder.origin.y) && near(w, folder.size.width), "{folder:?} {shots:?}");
+}
+
+#[nd::test]
+fn a_note_left_for_the_trash_fades_where_it_is() {
+    let (rig, _, shots) = leave_note(|rig| {
+        rig.win.root().clone().update(&mut rig.cx, |v, cx| v.go(Location::Trash, cx));
+    });
+    assert_eq!(rig.view().location(), &Location::Trash);
+    let (region, _) = rig.view_region();
+    let &(x0, y0, _) = shots.first().expect("fades out over a few frames");
+    assert!(shots.iter().all(|&(x, y, w)| near(x, x0) && near(y, y0) && near(w, region)), "no flight: {shots:?}");
+}
+
+#[nd::test]
+fn a_note_closed_with_back_lands_on_its_card() {
+    let (mut rig, _, shots) = leave_note(|rig| {
+        let id = rig.id();
+        assert!(rig.cx.dispatch_action(id, &GoBack));
+    });
+    let card = window_frame(&mut rig, "frame:note:Journal/Monday.md");
+    let &(x, y, w) = shots.last().expect("frames");
+    assert!(near(x, card.origin.x) && near(y, card.origin.y) && near(w, card.size.width), "{card:?} {shots:?}");
+}

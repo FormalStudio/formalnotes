@@ -62,6 +62,12 @@ pub fn frame_id(entry: &EntryId) -> SharedString {
     format!("frame:{}", entry_key(entry)).into()
 }
 
+/// The id of a card's face, the part that takes taps: a note closing on a page without its card
+/// shrinks into the face of the folder card holding it.
+pub fn face_id(entry: &EntryId) -> SharedString {
+    format!("face:{}", entry_key(entry)).into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
