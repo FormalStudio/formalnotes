@@ -621,10 +621,72 @@ fn live_round_trip() {
         assert_eq!(a.files(), b.files());
         let usage = remote.usage(&session.token).unwrap();
         assert_eq!(usage.objects, 4, "{usage:?}");
+        fs::remove_file(a.path("Diary/Slow start.md")).unwrap();
+        a.sync();
+        b.sync();
+        assert!(b.read("Diary/Slow start.md").is_none());
+        assert_eq!(b.trashed().len(), 1, "{:?}", b.trashed());
+        assert_eq!(remote.usage(&session.token).unwrap().objects, 3);
     }));
     account::delete_account(&*remote, &one, &session, PASSWORD).unwrap();
     assert!(remote.usage(&session.token).is_err(), "the account is gone");
     if let Err(panic) = result {
         std::panic::resume_unwind(panic);
     }
+}
+
+/// Interop with the reference client (`server/scripts/roundtrip.ts` helpers): phase one pushes
+/// from a new account and writes its credentials to `INTEROP_FILE`; the Bun script checks the
+/// objects, adds one of its own; phase two pulls it and deletes the account.
+#[test]
+#[ignore = "talks to the real server"]
+fn live_interop_push() {
+    use formalnotes::sync::remote::{Http, base_url};
+    let remote: Arc<dyn Remote> = Arc::new(Http::new(base_url()));
+    let email = format!("interop-{}@example.com", &crypto::new_id().unwrap()[..8]);
+    let session = account::sign_up(&*remote, &Memory::default(), &email, PASSWORD).unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut engine = Engine::new(
+        dir.path().to_owned(),
+        remote.clone(),
+        session.token.clone(),
+        session.vault,
+        data.path().join("s.json"),
+        Busy::default(),
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("Work")).unwrap();
+    fs::write(dir.path().join("Work/Plan.md"), "# Plan\n\nCafé, naïve, 日本語.\n").unwrap();
+    fs::write(dir.path().join("Work/.folder.json"), "{\"v\":1,\"view\":\"table\"}").unwrap();
+    engine.sync().unwrap();
+    let out = std::env::var("INTEROP_FILE").expect("INTEROP_FILE");
+    fs::write(out, serde_json::json!({ "email": email, "password": PASSWORD }).to_string()).unwrap();
+}
+
+#[test]
+#[ignore = "talks to the real server"]
+fn live_interop_pull() {
+    use formalnotes::sync::remote::{Http, base_url};
+    let remote: Arc<dyn Remote> = Arc::new(Http::new(base_url()));
+    let creds: serde_json::Value =
+        serde_json::from_slice(&fs::read(std::env::var("INTEROP_FILE").unwrap()).unwrap()).unwrap();
+    let email = creds["email"].as_str().unwrap();
+    let session = account::sign_in(&*remote, &Memory::default(), email, PASSWORD).unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut engine = Engine::new(
+        dir.path().to_owned(),
+        remote.clone(),
+        session.token.clone(),
+        session.vault,
+        data.path().join("s.json"),
+        Busy::default(),
+    )
+    .unwrap();
+    let report = engine.sync().unwrap();
+    let text = fs::read_to_string(dir.path().join("FromBun.md"));
+    account::delete_account(&*remote, &Memory::default(), &session, PASSWORD).unwrap();
+    assert!(report.problems.is_empty(), "{:?}", report.problems);
+    assert_eq!(text.unwrap(), "# From Bun\n\nSealed by WebCrypto.\n");
 }
