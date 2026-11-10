@@ -97,8 +97,9 @@ export function FolderCard({ name, items, firstPage, width, height, motion, zoom
   const front = useAnimatedStyle(() => ({ transform: [{ translateY: 2 * motion.front.get() }] }));
   const plateTop = FOLDER_TAB_RISE * height;
   // Not collapsable: the zoom source takes one native child, and a flattened card would hand it the tab alone.
+  // Page-coloured: the zoom draws the card's transparent corners black.
   const card = (
-    <View collapsable={false} style={{ width, height }}>
+    <View collapsable={false} style={{ width, height, backgroundColor: colors.page }}>
       <View
         style={{
           position: 'absolute',
