@@ -64,6 +64,13 @@ pub fn card_columns(avail: f32, gap: f32) -> usize {
     if fit(200.) >= 4 { fit(240.).max(4) } else { fit(160.).clamp(1, 3) }
 }
 
+/// The Cards and Table switch in the toolbar. NSToolbar takes the item's width from its
+/// layout, and the control's own measure is a few points short of its two labels.
+pub const VIEW_MODE_WIDTH: f32 = 128.;
+
+/// The account picture in the toolbar: the height of a toolbar button's glyph area.
+pub const TOOLBAR_AVATAR: f32 = 26.;
+
 #[cfg(test)]
 mod tests {
     use super::*;

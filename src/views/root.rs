@@ -83,6 +83,8 @@ impl FormalNotes {
             )
         });
         cx.observe(&store, |this, store, cx| this.store_changed(store, cx)).detach();
+        let account = crate::sync::model(cx);
+        cx.observe(&account, |_, _, cx| cx.notify()).detach();
         let (ask, automations) = Self::ai_parts(&store, cx);
         Self {
             store,
@@ -580,6 +582,31 @@ impl FormalNotes {
         crate::settings::open_window(cx);
     }
 
+    /// The account at the end of the toolbar: its picture once signed in. Both open the
+    /// Account pane of Settings.
+    fn account_item(&self, cx: &mut Context<Self>) -> AnyElement {
+        let view = crate::sync::model(cx).read(cx).view.clone();
+        if view.email.is_none() {
+            return icon_button("account", Icon::User)
+                .tooltip("Sign In to Sync")
+                .on_click(|_: &ClickEvent, _, cx| {
+                    crate::settings::open_tab(cx, crate::settings::ACCOUNT_TAB);
+                })
+                .into_any_element();
+        }
+        div()
+            .id("account")
+            .role(nd::native::Role::Button, "Account")
+            // NSToolbar sizes a custom item from its laid-out box, so the wrapper carries the size.
+            .size(px(super::metrics::TOOLBAR_AVATAR))
+            .flex_none()
+            .on_tap(|_: &TapEvent, _, cx| {
+                crate::settings::open_tab(cx, crate::settings::ACCOUNT_TAB);
+            })
+            .child(super::account::account_avatar(&view, super::metrics::TOOLBAR_AVATAR).id("account-avatar"))
+            .into_any_element()
+    }
+
     /// What the window is showing, for its title: the note, the folder, Home or the trash.
     fn window_title(&self, cx: &App) -> String {
         if let Some(note) = self.open.as_ref().and_then(|id| self.store.read(cx).note(id)) {
@@ -792,10 +819,14 @@ impl Render for FormalNotes {
                 segmented(VIEW_MODE, ["Cards", "Table"])
                     .selected(usize::from(table))
                     .label("View")
+                    .w(px(super::metrics::VIEW_MODE_WIDTH))
                     .on_change(cx.listener(|this, e: &SelectChanged, _, cx| this.set_view_mode(e.index == 1, cx))),
             ),
             None => toolbar,
-        };
+        }
+        // A space ends the button group, so the account sits on its own at the window's edge.
+        .space()
+        .labeled_item("Account", self.account_item(cx));
         let scaffold = scaffold()
             .toolbar(toolbar)
             .sidebar(

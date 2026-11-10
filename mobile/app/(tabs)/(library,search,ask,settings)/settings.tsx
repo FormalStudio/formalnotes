@@ -1,8 +1,9 @@
-import { FieldGroup, Host, ListItem, Picker, Text } from '@expo/ui';
+import { FieldGroup, Host, ListItem, Picker, RNHostView, Text } from '@expo/ui';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Alert } from 'react-native';
 
+import { ProfileHeader } from '@/components/account/profile-header';
 import { ai, useAi } from '@/lib/app/ai';
 import { useNow } from '@/lib/app/clock';
 import { askName } from '@/lib/app/prompt';
@@ -47,10 +48,17 @@ export default function Settings() {
   return (
     <Host style={{ flex: 1 }}>
       <FieldGroup>
+        {account.email ? (
+          <FieldGroup.Section>
+            <RNHostView matchContents>
+              <ProfileHeader email={account.email} uri={account.avatar} detail={syncLine(account, now)} />
+            </RNHostView>
+          </FieldGroup.Section>
+        ) : null}
+
         <FieldGroup.Section title="Account">
           {account.email ? (
             <>
-              <ListItem supportingText={syncLine(account, now)}>{account.email}</ListItem>
               <ListItem onPress={() => void sync.syncNow()}>Sync now</ListItem>
               <ListItem onPress={() => router.push('/password')}>Change password</ListItem>
               <ListItem onPress={signOut}>Sign out</ListItem>

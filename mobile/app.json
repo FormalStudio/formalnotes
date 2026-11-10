@@ -36,6 +36,14 @@
       "expo-sqlite",
       ["expo-secure-store", { "faceIDPermission": false }],
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Formal Notes uses the photo you choose as your profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "expo-status-bar",
       [
         "expo-splash-screen",

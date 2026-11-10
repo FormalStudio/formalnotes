@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 use jiff::Timestamp;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-use super::account::{self, Keystore, Session};
+use super::account::{self, AccountError, Keystore, Session};
 use super::engine::{Busy, Engine, SyncError};
+use super::picture::{self, Picture};
 use super::remote::{Remote, RemoteError, Usage};
 use super::state;
 
@@ -42,6 +43,9 @@ pub enum Command {
     DeleteAccount {
         password: String,
     },
+    /// An image file to use as the profile picture.
+    SetPicture(PathBuf),
+    RemovePicture,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +55,7 @@ pub enum Task {
     SigningOut,
     ChangingPassword,
     DeletingAccount,
+    SavingPicture,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,6 +77,8 @@ pub enum Event {
     SignedIn(String),
     SignedOut,
     Usage(Usage),
+    /// The account's picture as it is now: after sign-in, a change here or one from another device.
+    Picture(Option<Picture>),
     Status(Status),
     Working(Task),
     /// An account request finished: `None` when it worked, else what went wrong.
@@ -98,6 +105,8 @@ pub struct Service {
     change_at: Option<Instant>,
     next_at: Option<Instant>,
     backoff: Option<Duration>,
+    /// The version of the picture the UI was last sent.
+    picture: Option<u64>,
 }
 
 /// Starts the sync thread. `state_dir` holds the per-library state files.
@@ -133,6 +142,7 @@ impl Service {
             change_at: None,
             next_at: None,
             backoff: None,
+            picture: None,
         }
     }
 
@@ -222,7 +232,53 @@ impl Service {
                 }
                 None => Ok(None),
             }),
+            Command::SetPicture(path) => self.picture_task(|s, session| {
+                let file = std::fs::read(&path).map_err(|e| format!("The picture could not be read: {e}"))?;
+                let jpeg = picture::square_jpeg(&file).ok_or("That file is not a picture Formal Notes can read.")?;
+                let blob = picture::seal(&session.vault, &jpeg).map_err(|e| e.to_string())?;
+                let version = s.remote.put_avatar(&session.token, &blob).map_err(|e| AccountError::from(e).to_string())?;
+                Ok(Some(Picture { version, jpeg: jpeg.into() }))
+            }),
+            Command::RemovePicture => self.picture_task(|s, session| {
+                s.remote.delete_avatar(&session.token).map_err(|e| AccountError::from(e).to_string())?;
+                Ok(None)
+            }),
         }
+    }
+
+    /// Changes the account's picture and shows the result.
+    fn picture_task(&mut self, run: impl FnOnce(&Self, &Session) -> Result<Option<Picture>, String>) {
+        let Some(session) = self.session.clone() else { return };
+        self.send(Event::Working(Task::SavingPicture));
+        match run(self, &session) {
+            Ok(picture) => {
+                self.picture = picture.as_ref().map(|p| p.version);
+                self.send(Event::Picture(picture));
+                self.send(Event::Finished(Task::SavingPicture, None));
+            }
+            Err(why) => self.send(Event::Finished(Task::SavingPicture, Some(why))),
+        }
+    }
+
+    /// Fetches the picture when the account reports a version other than the one shown.
+    fn follow_picture(&mut self, version: Option<u64>) {
+        if version == self.picture {
+            return;
+        }
+        let Some(session) = &self.session else { return };
+        let picture = match version {
+            None => None,
+            Some(version) => match self.remote.avatar(&session.token) {
+                Ok(Some(blob)) => match picture::open(&session.vault, &blob) {
+                    Ok(jpeg) => Some(Picture { version, jpeg: jpeg.into() }),
+                    Err(_) => return,
+                },
+                Ok(None) => None,
+                Err(_) => return,
+            },
+        };
+        self.picture = picture.as_ref().map(|p| p.version);
+        self.send(Event::Picture(picture));
     }
 
     /// Runs an account request. `Some(session)` leaves this device signed in with it, `None`
@@ -249,12 +305,16 @@ impl Service {
         self.session = Some(session);
         self.engine = None;
         self.backoff = None;
+        self.picture = None;
+        self.send(Event::Picture(None));
         self.send(Event::Status(Status::Waiting));
         self.sync(false);
     }
 
     fn signed_out(&mut self) {
         self.session = None;
+        self.picture = None;
+        self.send(Event::Picture(None));
         self.engine = None;
         self.change_at = None;
         self.next_at = None;
@@ -320,7 +380,9 @@ impl Service {
                 if let Some(session) = &self.session
                     && let Ok(usage) = self.remote.usage(&session.token)
                 {
+                    let picture = usage.avatar;
                     self.send(Event::Usage(usage));
+                    self.follow_picture(picture);
                 }
             }
             Err(SyncError::Remote(RemoteError::Unauthorized)) => {

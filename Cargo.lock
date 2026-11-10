@@ -2115,6 +2115,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "hkdf 0.12.4",
+ "image",
  "jiff",
  "nd",
  "nd-test",

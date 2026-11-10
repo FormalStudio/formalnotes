@@ -14,7 +14,8 @@ use formalnotes::sync::crypto::{self, Key};
 use formalnotes::sync::engine::{Busy, Engine, Report};
 use formalnotes::sync::object::{Kind, Payload};
 use formalnotes::sync::remote::{Fake, Push, Remote};
-use formalnotes::sync::service::{Command, Event, Service, Status};
+use formalnotes::sync::picture::Picture;
+use formalnotes::sync::service::{Command, Event, Service, Status, Task};
 
 struct Device {
     dir: tempfile::TempDir,
@@ -520,6 +521,59 @@ fn the_service_signs_up_syncs_and_signs_out() {
     let seen: Vec<Event> = events.try_iter().collect();
     assert!(seen.contains(&Event::SignedOut), "{seen:?}");
     assert!(lib.path().join("Hello.md").exists(), "local notes stay");
+}
+
+fn service(fake: &Fake, lib: &Path, data: &Path) -> (Service, flume::Receiver<Event>) {
+    let (events_tx, events) = flume::unbounded();
+    let (commands, _rx) = flume::unbounded::<Command>();
+    let mut service = Service::new(
+        Arc::new(fake.clone()),
+        Arc::new(Memory::default()),
+        data.to_owned(),
+        Busy::default(),
+        events_tx,
+        commands.downgrade(),
+    );
+    service.handle(Command::Root(Some(lib.to_owned())));
+    (service, events)
+}
+
+fn pictures(events: &flume::Receiver<Event>) -> Vec<Option<Picture>> {
+    events.try_iter().filter_map(|e| if let Event::Picture(p) = e { Some(p) } else { None }).collect()
+}
+
+#[test]
+fn a_profile_picture_reaches_the_other_device_sealed() {
+    let fake = Fake::new();
+    let (lib_a, lib_b, data) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (mut a, events_a) = service(&fake, lib_a.path(), &data.path().join("a"));
+    let (mut b, events_b) = service(&fake, lib_b.path(), &data.path().join("b"));
+    a.handle(Command::SignUp { email: "ada@example.com".into(), password: PASSWORD.into() });
+    b.handle(Command::SignIn { email: "ada@example.com".into(), password: PASSWORD.into() });
+    assert_eq!(pictures(&events_a), [None]);
+
+    let file = data.path().join("photo.png");
+    image::RgbImage::from_pixel(40, 80, image::Rgb([200, 30, 30])).save(&file).unwrap();
+    a.handle(Command::SetPicture(file));
+    let shown = pictures(&events_a);
+    let Some(Some(picture)) = shown.last() else { panic!("no picture: {shown:?}") };
+    let decoded = image::load_from_memory(&picture.jpeg).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (512, 512));
+
+    // The server holds a sealed blob, not the JPEG.
+    let blob = fake.avatar_blob("ada@example.com").unwrap();
+    assert!(!blob.contains(&formalnotes::sync::crypto::to_base64(&picture.jpeg[..64])));
+
+    b.handle(Command::SyncNow);
+    assert_eq!(pictures(&events_b).last(), Some(&Some(picture.clone())));
+
+    b.handle(Command::RemovePicture);
+    assert_eq!(pictures(&events_b), [None]);
+    a.handle(Command::SyncNow);
+    assert_eq!(pictures(&events_a), [None]);
+
+    a.handle(Command::SetPicture(data.path().join("missing.png")));
+    assert!(events_a.try_iter().any(|e| matches!(e, Event::Finished(Task::SavingPicture, Some(_)))));
 }
 
 #[test]

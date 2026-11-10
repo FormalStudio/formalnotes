@@ -57,6 +57,9 @@ pub struct Usage {
     pub email: String,
     pub objects: u64,
     pub bytes: u64,
+    /// The profile picture's version, `None` without one.
+    #[serde(default)]
+    pub avatar: Option<u64>,
 }
 
 /// A pulled object in its current state.
@@ -102,6 +105,11 @@ pub trait Remote: Send + Sync {
     fn put_keys(&self, token: &str, wrapped: &str) -> Result<()>;
     fn change_password(&self, token: &str, current: &str, new: &str, wrapped: &str) -> Result<()>;
     fn delete_account(&self, token: &str, password: &str) -> Result<()>;
+    /// The sealed profile picture, or `None` for an account without one.
+    fn avatar(&self, token: &str) -> Result<Option<String>>;
+    /// Stores the sealed picture and returns its version.
+    fn put_avatar(&self, token: &str, blob: &str) -> Result<u64>;
+    fn delete_avatar(&self, token: &str) -> Result<()>;
     fn pull(&self, token: &str, since: u64, limit: u32) -> Result<Page>;
     fn push(&self, token: &str, changes: &[Push]) -> Result<Vec<Outcome>>;
 }
@@ -236,6 +244,23 @@ impl Remote for Http {
         self.call("DELETE", "/v1/account", Some(token), Some(json!({ "password": password }))).map(drop)
     }
 
+    fn avatar(&self, token: &str) -> Result<Option<String>> {
+        match self.call("GET", "/v1/avatar", Some(token), None) {
+            Ok((_, _, v)) => Ok(v["blob"].as_str().map(str::to_owned)),
+            Err(e) if e.code() == Some("no_avatar") => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn put_avatar(&self, token: &str, blob: &str) -> Result<u64> {
+        let (_, _, v) = self.call("PUT", "/v1/avatar", Some(token), Some(json!({ "blob": blob })))?;
+        v["avatar"].as_u64().ok_or_else(|| RemoteError::Offline("unexpected answer: no picture version".into()))
+    }
+
+    fn delete_avatar(&self, token: &str) -> Result<()> {
+        self.call("DELETE", "/v1/avatar", Some(token), None).map(drop)
+    }
+
     fn pull(&self, token: &str, since: u64, limit: u32) -> Result<Page> {
         decode(self.call("GET", &format!("/v1/sync?since={since}&limit={limit}"), Some(token), None)?.2)
     }
@@ -272,7 +297,13 @@ struct FakeUser {
     keys: Option<String>,
     counter: u64,
     objects: BTreeMap<String, Change>,
+    /// The picture's version and sealed blob.
+    avatar: Option<(u64, String)>,
+    avatar_version: u64,
 }
+
+/// The largest sealed profile picture the server takes.
+const MAX_AVATAR: u64 = 262_144;
 
 fn api<T>(status: u16, code: &str) -> Result<T> {
     Err(RemoteError::Api { status, code: code.to_owned(), message: String::new() })
@@ -324,6 +355,11 @@ impl Fake {
                 u.objects.clear();
             }
         });
+    }
+
+    /// The sealed picture the server holds for the account.
+    pub fn avatar_blob(&self, email: &str) -> Option<String> {
+        self.with(|s| s.users.get(email).and_then(|u| u.avatar.as_ref().map(|(_, blob)| blob.clone())))
     }
 
     pub fn user_exists(&self, email: &str) -> bool {
@@ -408,7 +444,7 @@ impl Remote for Fake {
         self.user(token, |u| {
             let live = u.objects.values().filter(|c| !c.deleted);
             let (objects, bytes) = live.fold((0, 0), |(n, b), c| (n + 1, b + blob_len(&c.blob)));
-            Ok(Usage { email, objects, bytes })
+            Ok(Usage { email, objects, bytes, avatar: u.avatar.as_ref().map(|(version, _)| *version) })
         })
     }
 
@@ -422,6 +458,28 @@ impl Remote for Fake {
                 return api(409, "keys_exist");
             }
             u.keys = Some(wrapped.to_owned());
+            Ok(())
+        })
+    }
+
+    fn avatar(&self, token: &str) -> Result<Option<String>> {
+        self.user(token, |u| Ok(u.avatar.as_ref().map(|(_, blob)| blob.clone())))
+    }
+
+    fn put_avatar(&self, token: &str, blob: &str) -> Result<u64> {
+        self.user(token, |u| {
+            if blob_len(&Some(blob.to_owned())) > MAX_AVATAR {
+                return api(413, "too_large");
+            }
+            u.avatar_version += 1;
+            u.avatar = Some((u.avatar_version, blob.to_owned()));
+            Ok(u.avatar_version)
+        })
+    }
+
+    fn delete_avatar(&self, token: &str) -> Result<()> {
+        self.user(token, |u| {
+            u.avatar = None;
             Ok(())
         })
     }

@@ -143,9 +143,7 @@ short) makes a vault key and puts it.
 JPEG 512 pixels across, at most 262144 bytes sealed (`413 too_large`). The server cannot open
 it. `avatar` is the Unix milliseconds of the last upload: a device keeps the opened picture
 with that number and fetches again when `GET /v1/account` reports another. An account without
-a picture shows the first letter of its email on a gradient picked from the email: the
-FNV-1a 64 hash `h` of the email's UTF-8 gives a first hue of `h mod 360` degrees and a second
-`30 + (h >> 16) mod 31` degrees further round the wheel.
+a picture shows the first letter of its email.
 
 **Pull.** Every account has a counter. Each accepted change takes the next value as the
 object's `seq`. `GET /v1/sync?since=0` returns every object; `since=<cursor>` returns the

@@ -8,9 +8,32 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use formalnotes::sync::account::{self, Keychain};
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use formalnotes::sync::account::{self, Keystore};
+use formalnotes::sync::picture;
 use formalnotes::sync::remote::{Http, Remote, base_url};
 use nd_test::{LaunchOptions, launch_app};
+
+/// The test's own device. Reading the app's keychain entry from this binary would stop on a
+/// macOS prompt, so it signs in beside the app instead.
+#[derive(Default)]
+struct Memory(Mutex<HashMap<String, String>>);
+
+impl Keystore for Memory {
+    fn get(&self, name: &str) -> std::io::Result<Option<String>> {
+        Ok(self.0.lock().unwrap().get(name).cloned())
+    }
+    fn set(&self, name: &str, value: &str) -> std::io::Result<()> {
+        self.0.lock().unwrap().insert(name.to_owned(), value.to_owned());
+        Ok(())
+    }
+    fn delete(&self, name: &str) -> std::io::Result<()> {
+        self.0.lock().unwrap().remove(name);
+        Ok(())
+    }
+}
 
 fn shots() -> PathBuf {
     std::env::var_os("FORMALNOTES_SHOTS").map_or_else(std::env::temp_dir, PathBuf::from)
@@ -48,21 +71,8 @@ fn real_account_signs_up_syncs_and_shows_its_status() {
     let out = shots();
 
     until("the main window", || app.get_by_test_id("sidebar").count().unwrap_or(0) > 0);
-    let settings = || {
-        let windows = app.windows().unwrap();
-        windows.as_array().unwrap().iter().find(|w| w["title"] == "Settings").and_then(|w| w["id"].as_u64())
-    };
-    until("the settings window", || {
-        if settings().is_none() {
-            // To the main window by id: a freshly launched app may not be key yet.
-            let sent = app.call("keys", serde_json::json!({ "keys": "cmd-,", "window": 1 }));
-            eprintln!("keys: {sent:?}");
-            std::thread::sleep(Duration::from_millis(500));
-        }
-        settings().is_some()
-    });
-    eprintln!("TREE {}", app.tree(settings()).unwrap().snapshot());
-    app.get_by_text("Account").first().click().unwrap();
+    // The toolbar's account button opens Settings on the Account pane.
+    app.get_by_test_id("account").click().unwrap();
     until("the account form", || app.get_by_test_id("account-email").count().unwrap_or(0) > 0);
     app.screenshot(&out.join("formalnotes-account-signed-out.png"), None).unwrap();
 
@@ -72,9 +82,25 @@ fn real_account_signs_up_syncs_and_shows_its_status() {
     until("the signed-in pane", || app.get_by_test_id("account-sign-out").count().unwrap_or(0) > 0);
 
     let remote = Http::new(base_url());
-    let session = account::load(&Keychain).unwrap().expect("the session is in the keychain");
+    let device = Memory::default();
+    let session = account::sign_in(&remote, &device, &email, password).unwrap();
     until("the library on the server", || remote.usage(&session.token).is_ok_and(|u| u.objects == 3));
     app.screenshot(&out.join("formalnotes-account-signed-in.png"), None).unwrap();
+
+    // A picture another device put shows after the next sync, in the pane and in the toolbar.
+    let photo = image::RgbImage::from_fn(600, 400, |x, y| image::Rgb([(x / 3) as u8, (y / 2) as u8, 180]));
+    let mut png = Vec::new();
+    photo.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let jpeg = picture::square_jpeg(&png).unwrap();
+    let version = remote.put_avatar(&session.token, &picture::seal(&session.vault, &jpeg).unwrap()).unwrap();
+    assert_eq!(remote.usage(&session.token).unwrap().avatar, Some(version));
+    app.get_by_test_id("account-sync-now").click().unwrap();
+    until("the remove button", || app.get_by_test_id("account-picture-remove").count().unwrap_or(0) > 0);
+    std::thread::sleep(Duration::from_secs(1));
+    app.screenshot(&out.join("formalnotes-account-picture.png"), None).unwrap();
+    app.screenshot(&out.join("formalnotes-toolbar-picture.png"), Some(1)).unwrap();
+    app.get_by_test_id("account-picture-remove").click().unwrap();
+    until("the picture gone from the server", || remote.usage(&session.token).is_ok_and(|u| u.avatar.is_none()));
 
     drop(app);
 
@@ -87,8 +113,16 @@ fn real_account_signs_up_syncs_and_shows_its_status() {
     .expect("relaunch");
     until("the offline line", || app.get_by_text("Offline").count().unwrap_or(0) > 0);
     app.screenshot(&out.join("formalnotes-sidebar-offline.png"), None).unwrap();
+
+    // Sign out in the app so its session leaves the keychain; the status line opens the pane.
+    app.get_by_test_id("sync-status-line").click().unwrap();
+    until("the signed-in pane", || app.get_by_test_id("account-sign-out").count().unwrap_or(0) > 0);
+    app.screenshot(&out.join("formalnotes-account-offline.png"), None).unwrap();
+    app.get_by_test_id("account-sign-out").scroll_into_view().unwrap();
+    app.get_by_test_id("account-sign-out").click().unwrap();
+    until("the account form", || app.get_by_test_id("account-email").count().unwrap_or(0) > 0);
     drop(app);
 
-    account::delete_account(&remote, &Keychain, &session, password).unwrap();
+    account::delete_account(&remote, &device, &session, password).unwrap();
     assert!(remote.usage(&session.token).is_err(), "the account is gone");
 }

@@ -2,12 +2,34 @@
 //! the account's use, the last sync and the account commands. Every request runs on the sync
 //! thread; the pane shows what it is doing and what went wrong.
 
-use nd::components::FormRow;
+use nd::components::{Avatar, FormRow, ImageSource, OpenDialog, Person, avatar};
 use nd::prelude::*;
 
 use crate::sync::{Status, SyncModel, SyncView, Task};
 
+/// The picture in the Account pane, in points.
+const PICTURE_SIZE: f32 = 44.;
+
 const PRIVACY: &str = "Notes are encrypted on this device before they sync. A forgotten password cannot be reset.";
+
+/// The image files the picture can be made from.
+const PICTURE_TYPES: [&str; 4] = ["jpg", "jpeg", "png", "webp"];
+
+/// The account's picture `size` points across: the photo, or the email's first letter.
+pub fn account_avatar(view: &SyncView, size: f32) -> Avatar {
+    let email = view.email.as_deref().unwrap_or_default();
+    let person = Person::new(email.split('@').next().unwrap_or_default().to_owned());
+    match &view.picture {
+        Some(picture) => avatar(
+            person.image(ImageSource::Bytes {
+                key: format!("account-picture-{}", picture.version).into(),
+                bytes: picture.jpeg.clone(),
+            }),
+            size,
+        ),
+        None => avatar(person, size),
+    }
+}
 
 /// What the pane is asking for under the account rows.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -42,6 +64,7 @@ fn task_label(task: Task) -> &'static str {
         Task::SigningOut => "Signing out…",
         Task::ChangingPassword => "Changing the password…",
         Task::DeletingAccount => "Deleting the account…",
+        Task::SavingPicture => "Saving the picture…",
     }
 }
 
@@ -104,6 +127,15 @@ impl AccountPane {
                 let password = this.password.read(cx).text().to_string();
                 this.model.update(cx, |m, _| m.delete_account(password));
             });
+        });
+    }
+
+    fn choose_picture(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let model = self.model.downgrade();
+        let dialog = OpenDialog::file().title("Choose a picture").prompt("Choose").extensions(PICTURE_TYPES);
+        window.open_dialog(cx, dialog, move |paths, cx| {
+            let Some(path) = paths.and_then(|paths| paths.into_iter().next()) else { return };
+            let _ = model.update(cx, |m, _| m.set_picture(path));
         });
     }
 
@@ -196,6 +228,22 @@ impl AccountPane {
         let account = form_section()
             .title("Account")
             .footer(PRIVACY)
+            .child(
+                form_row("Picture").child(
+                    h_flex()
+                        .gap(theme.spacing.sm)
+                        .items_center()
+                        .child(account_avatar(model, PICTURE_SIZE).id("account-picture"))
+                        .child(button("account-picture-choose", "Choose…").disabled(busy).on_click(cx.listener(
+                            |this, _: &ClickEvent, window, cx| this.choose_picture(window, cx),
+                        )))
+                        .children(model.picture.is_some().then(|| {
+                            button("account-picture-remove", "Remove").disabled(busy).on_click(cx.listener(
+                                |this, _: &ClickEvent, _, cx| this.model.update(cx, |m, _| m.remove_picture()),
+                            ))
+                        })),
+                ),
+            )
             .child(form_row("Email").child(text(email.to_owned()).text_color(theme.text.secondary)))
             .child(form_row("Stored").child(text(usage).text_color(theme.text.secondary)))
             .child(

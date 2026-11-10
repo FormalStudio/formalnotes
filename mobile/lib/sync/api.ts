@@ -78,8 +78,27 @@ export class Api {
     await this.request('POST', '/api/auth/sign-out', {});
   }
 
-  account(): Promise<{ email: string; objects: number; bytes: number }> {
+  account(): Promise<{ email: string; objects: number; bytes: number; avatar: number | null }> {
     return this.json('GET', '/v1/account');
+  }
+
+  /** The sealed profile picture, or null for an account without one. */
+  async avatar(): Promise<string | null> {
+    try {
+      return (await this.json<{ blob: string }>('GET', '/v1/avatar')).blob;
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'no_avatar') return null;
+      throw e;
+    }
+  }
+
+  /** Stores the sealed picture and returns its version. */
+  async putAvatar(blob: string): Promise<number> {
+    return (await this.json<{ avatar: number }>('PUT', '/v1/avatar', { blob })).avatar;
+  }
+
+  async deleteAvatar(): Promise<void> {
+    await this.request('DELETE', '/v1/avatar');
   }
 
   /** The wrapped vault key, or null when sign-up was cut short before it was put. */

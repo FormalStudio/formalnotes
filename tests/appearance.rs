@@ -61,7 +61,7 @@ fn main() {
         })
         .window("settings-account", |cx| settings(cx, None))
         .window("settings-account-signed-in", |cx| {
-            let usage = Usage { email: "ada@example.com".into(), objects: 128, bytes: 2_400_000 };
+            let usage = Usage { email: "ada@example.com".into(), objects: 128, bytes: 2_400_000, avatar: None };
             let synced = Status::Synced { at: jiff::Timestamp::now(), problems: Vec::new() };
             settings(cx, Some((usage, synced)))
         })

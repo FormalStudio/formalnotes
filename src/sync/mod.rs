@@ -8,6 +8,7 @@ pub mod crypto;
 pub mod engine;
 pub mod local;
 pub mod object;
+pub mod picture;
 pub mod remote;
 pub mod service;
 pub mod state;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 
 use nd::prelude::*;
 
+pub use picture::Picture;
 pub use service::{Status, Task};
 
 use remote::Usage;
@@ -33,6 +35,7 @@ pub struct SyncModel {
 pub struct SyncView {
     pub email: Option<String>,
     pub usage: Option<Usage>,
+    pub picture: Option<Picture>,
     pub status: Status,
     /// The account request running now.
     pub task: Option<Task>,
@@ -45,7 +48,7 @@ struct Global(Entity<SyncModel>);
 impl SyncModel {
     /// A model with no sync thread behind it: tests and the appearance audit.
     pub fn idle() -> Self {
-        let view = SyncView { email: None, usage: None, status: Status::SignedOut, task: None, failure: None };
+        let view = SyncView { email: None, usage: None, picture: None, status: Status::SignedOut, task: None, failure: None };
         Self { handle: None, view }
     }
 
@@ -58,6 +61,7 @@ impl SyncModel {
                 view.usage = None;
             }
             Event::Usage(usage) => view.usage = Some(usage),
+            Event::Picture(picture) => view.picture = picture,
             Event::Status(status) => view.status = status,
             Event::Working(task) => {
                 view.task = Some(task);
@@ -94,6 +98,15 @@ impl SyncModel {
 
     pub fn delete_account(&mut self, password: String) {
         self.send(Command::DeleteAccount { password });
+    }
+
+    /// Uses the image file at `path` as the profile picture.
+    pub fn set_picture(&mut self, path: PathBuf) {
+        self.send(Command::SetPicture(path));
+    }
+
+    pub fn remove_picture(&mut self) {
+        self.send(Command::RemovePicture);
     }
 
     pub fn sync_now(&mut self) {

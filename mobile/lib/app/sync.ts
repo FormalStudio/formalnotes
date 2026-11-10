@@ -22,10 +22,16 @@ export type SyncState = {
   status: SyncStatus;
   lastSync: number | null;
   message: string | null;
+  /** The profile picture as a data URI, or null for the letter on its gradient. */
+  avatar: string | null;
 };
 
 const SESSION = 'sync.session';
 const LAST = 'sync.last';
+const AVATAR_VERSION = 'avatar.version';
+const AVATAR_JPEG = 'avatar.jpeg';
+const AVATAR_AAD = 'avatar';
+const dataUri = (jpeg: string) => `data:image/jpeg;base64,${jpeg}`;
 const SOON = 2000;
 const EVERY = 30000;
 
@@ -35,7 +41,7 @@ export const syncCrypto = new SyncCrypto(backend);
 type Stored = { email: string; token: string; vaultKey: string };
 
 class SyncController {
-  state: SyncState = { loaded: false, email: null, status: 'idle', lastSync: null, message: null };
+  state: SyncState = { loaded: false, email: null, status: 'idle', lastSync: null, message: null, avatar: null };
   private listeners = new Set<() => void>();
   private api = new Api(fetch as unknown as Fetch);
   private vaultKey: Uint8Array | null = null;
@@ -86,7 +92,8 @@ class SyncController {
       const s = JSON.parse(raw) as Stored;
       this.api.token = s.token;
       this.vaultKey = fromBase64(s.vaultKey);
-      this.set({ email: s.email });
+      const jpeg = library.meta(AVATAR_JPEG);
+      this.set({ email: s.email, avatar: jpeg ? dataUri(jpeg) : null });
     }
     this.set({ loaded: true, lastSync: last ? Number(last) : null });
     this.tick();
@@ -117,6 +124,7 @@ class SyncController {
         const now = Date.now();
         library.setMeta(LAST, String(now));
         this.set({ status: 'idle', lastSync: now, message: null });
+        await this.followAvatar(key);
       } catch (e) {
         if (e instanceof OfflineError) this.set({ status: 'offline', message: 'Offline. Changes sync when you are back.' });
         else if (e instanceof ApiError && e.status === 401) {
@@ -132,6 +140,35 @@ class SyncController {
       }
     })();
     return this.running;
+  }
+
+  /** Keeps the picture this phone shows, and the version it came with, for the next launch. */
+  private showAvatar(version: number | null, jpeg: string | null) {
+    library.setMeta(AVATAR_VERSION, version === null ? null : String(version));
+    library.setMeta(AVATAR_JPEG, jpeg);
+    this.set({ avatar: jpeg ? dataUri(jpeg) : null });
+  }
+
+  /** Fetches the picture when the account reports a version other than the one shown. */
+  private async followAvatar(key: Uint8Array) {
+    const { avatar } = await this.api.account();
+    const shown = library.meta(AVATAR_VERSION);
+    if ((avatar === null ? null : String(avatar)) === (shown ?? null)) return;
+    const blob = avatar === null ? null : await this.api.avatar();
+    if (!blob) return this.showAvatar(null, null);
+    this.showAvatar(avatar, toBase64(await syncCrypto.open(key, blob, AVATAR_AAD)));
+  }
+
+  /** `jpeg` is base64 of a square JPEG, 512 pixels across. */
+  async setAvatar(jpeg: string) {
+    if (!this.vaultKey) return;
+    const version = await this.api.putAvatar(await syncCrypto.seal(this.vaultKey, fromBase64(jpeg), AVATAR_AAD));
+    this.showAvatar(version, jpeg);
+  }
+
+  async removeAvatar() {
+    await this.api.deleteAvatar();
+    this.showAvatar(null, null);
   }
 
   private async keep(session: account.Session) {
@@ -151,8 +188,10 @@ class SyncController {
       library.sql.run('DELETE FROM synced');
       library.setMeta('sync.cursor', null);
       library.setMeta(LAST, null);
+      library.setMeta(AVATAR_VERSION, null);
+      library.setMeta(AVATAR_JPEG, null);
     });
-    this.set({ email: null, lastSync: null, status: 'idle' });
+    this.set({ email: null, lastSync: null, status: 'idle', avatar: null });
   }
 
   async signUp(email: string, password: string) {
@@ -198,7 +237,7 @@ export function accountError(e: unknown): string {
     if (e.code === 'wrong_password') return 'That password is wrong.';
     if (e.code === 'user_already_exists_use_another_email' || e.code.includes('already')) return 'An account with that email exists. Sign in instead.';
     if (e.code === 'quota') return 'Your account is full. Delete some notes to sync more.';
-    if (e.code === 'too_large') return 'A note is too large to sync.';
+    if (e.code === 'too_large') return 'That is too large to sync.';
     if (e.code === 'password_too_short') return 'That password is too short.';
     if (e.code === 'rate_limited') return 'Too many attempts. Try again in a minute.';
     return e.message;
