@@ -166,8 +166,18 @@ exist and `base` is `0`), and answers in the same order:
 ```
 
 A conflict carries the server's current state. Taken changes are kept even when others in the
-request conflict. Limits: 20000 live objects and 200 MB an account (`413 too_large` for a
-blob, `403 quota` for the account), and `429 rate_limited`.
+request conflict. A change with a `base` above 0 for an id the server has never seen answers
+`conflict` with `"seq": 0, "deleted": true, "blob": null`.
+
+Limits: 20000 live objects and 200,000,000 bytes of blobs an account (`413 too_large` for a
+blob, `403 quota` for the account), and `429 rate_limited`. `too_large`, `quota` and a
+malformed change (`400 bad_request`) reject the whole request and keep nothing; only
+conflicts are answered one by one.
+
+Other codes: `403 wrong_password` from `POST /v1/account/password` and `DELETE /v1/account`;
+Better Auth's own errors in the same shape with its code lowercased
+(`invalid_email_or_password`, `user_already_exists_use_another_email`, `password_too_short`). The account
+password must be exactly 43 base64url characters. `limit` above 500 is read as 500.
 
 ### What a device does
 
