@@ -1,0 +1,11 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "resolveJsonModule": true,
+    "moduleSuffixes": [".ios", ".native", ""],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules", "**/*.android.ts", "**/*.android.tsx", "**/*.test.ts", "lib/library/bun-sql.ts", "scripts"]
+}

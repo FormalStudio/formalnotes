@@ -1,0 +1,51 @@
+{
+  "name": "formalnotes-mobile",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "ios": "bun scripts/run-ios.ts",
+    "android": "expo run:android",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.android.json && tsc --noEmit -p tsconfig.bun.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@expo/ui": "~58.0.27",
+    "expo": "~58.0.23",
+    "expo-blur": "~58.0.5",
+    "expo-constants": "~58.0.15",
+    "expo-dev-client": "~58.0.18",
+    "expo-glass-effect": "~58.0.5",
+    "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.18",
+    "expo-linking": "~58.0.16",
+    "expo-network": "~58.0.4",
+    "expo-router": "~58.0.30",
+    "expo-secure-store": "~58.0.2",
+    "expo-splash-screen": "~58.0.13",
+    "expo-sqlite": "~58.0.15",
+    "expo-status-bar": "~58.0.4",
+    "expo-symbols": "~58.0.4",
+    "expo-system-ui": "~58.0.7",
+    "react": "^19.3.1",
+    "react-native": "0.88.1",
+    "react-native-gesture-handler": "~3.3.0",
+    "react-native-keyboard-controller": "1.22.7",
+    "react-native-nitro-modules": "^0.37.2",
+    "react-native-quick-base64": "^3.0.1",
+    "react-native-quick-crypto": "^1.1.9",
+    "react-native-reanimated": "4.7.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-worklets": "0.13.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/react": "~19.3.0",
+    "eslint": "^9",
+    "eslint-config-expo": "~58.0.4",
+    "typescript": "~6.0.3"
+  }
+}
