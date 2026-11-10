@@ -1,0 +1,101 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.66275,0.84706,0.72157,1.00000",
+      "srgb:0.24314,0.49412,0.40784,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
+  },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.05882,0.16078,0.12549,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "Marks",
+      "layers": [
+        {
+          "image-name": "marks.svg",
+          "name": "marks",
+          "glass": false,
+          "position": {
+            "scale": 1.28,
+            "translation-in-points": [
+              0,
+              -6
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "specular": false
+    },
+    {
+      "name": "Page",
+      "layers": [
+        {
+          "image-name": "page.svg",
+          "name": "page",
+          "glass": true,
+          "position": {
+            "scale": 1.28,
+            "translation-in-points": [
+              0,
+              -6
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true
+    },
+    {
+      "name": "Back page",
+      "layers": [
+        {
+          "image-name": "back.svg",
+          "name": "back",
+          "glass": true,
+          "position": {
+            "scale": 1.28,
+            "translation-in-points": [
+              0,
+              -6
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.4
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

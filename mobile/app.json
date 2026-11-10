@@ -20,7 +20,8 @@
           "UIInterfaceOrientationLandscapeRight"
         ]
       },
-      "appleTeamId": "8E7JB82GJK"
+      "appleTeamId": "8E7JB82GJK",
+      "icon": "./assets/FormalNotes.icon"
     },
     "android": {
       "package": "dev.formalsnake.formalnotes",
