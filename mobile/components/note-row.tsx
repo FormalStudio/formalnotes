@@ -7,6 +7,9 @@ import type { Note } from '@/lib/library/store';
 import { colors } from '@/lib/ui/colors';
 import { PAGE_PAD_X } from '@/lib/ui/metrics';
 
+const ICON_TILE = 36;
+const ROW_GAP = 12;
+
 /** The first line of the body that holds `query`'s first word, or the body's first line. */
 function snippet(note: Note, query: string): string {
   const lines = split(bodyOf(note.text))
@@ -23,35 +26,52 @@ export function NoteRow({ note, query = '', detail }: { note: Note; query?: stri
   const line = snippet(note, query);
   return (
     <Link href={{ pathname: '/note/[id]', params: { id: note.id } }} asChild>
-      <Pressable
-        accessibilityRole="button"
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          gap: 12,
-          paddingHorizontal: PAGE_PAD_X,
-          paddingVertical: 10,
-          backgroundColor: pressed ? colors.fill : 'transparent',
-        })}
-      >
-        <Icon sf="doc.text" md="description" size={20} color={colors.secondary} style={{ marginTop: 2 }} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: '600', color: colors.text }}>
-            {note.title}
-          </Text>
-          {line ? (
-            <Text numberOfLines={2} style={{ fontSize: 15, color: colors.secondary }}>
-              {line}
+      <Pressable accessibilityRole="button">
+        {/* The row's layout sits on this view: a link replaces its child's own style. */}
+        {({ pressed }) => (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: ROW_GAP,
+              paddingHorizontal: PAGE_PAD_X,
+              paddingVertical: 10,
+              backgroundColor: pressed ? colors.fill : 'transparent',
+            }}
+          >
+            <View
+              style={{
+                width: ICON_TILE,
+                height: ICON_TILE,
+                borderRadius: 10,
+                borderCurve: 'continuous',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.fill,
+              }}
+            >
+              <Icon sf="doc.text" md="description" size={18} color={colors.secondary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: '600', color: colors.text }}>
+                {note.title}
+              </Text>
+              {line ? (
+                <Text numberOfLines={1} style={{ fontSize: 15, color: colors.secondary }}>
+                  {line}
+                </Text>
+              ) : null}
+            </View>
+            <Text numberOfLines={1} style={{ maxWidth: 110, fontSize: 13, color: colors.tertiary }}>
+              {detail ?? (folder === '' ? 'Notes' : nameOf(folder))}
             </Text>
-          ) : null}
-          <Text numberOfLines={1} style={{ fontSize: 13, color: colors.tertiary }}>
-            {[folder === '' ? 'Notes' : nameOf(folder), detail].filter(Boolean).join(' · ')}
-          </Text>
-        </View>
+          </View>
+        )}
       </Pressable>
     </Link>
   );
 }
 
 export function RowSeparator() {
-  return <View style={{ height: 0.5, marginLeft: PAGE_PAD_X + 32, backgroundColor: colors.border }} />;
+  return <View style={{ height: 0.5, marginLeft: PAGE_PAD_X + ICON_TILE + ROW_GAP, backgroundColor: colors.border }} />;
 }

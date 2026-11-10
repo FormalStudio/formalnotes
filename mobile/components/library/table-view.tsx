@@ -87,29 +87,26 @@ export function TableView({
       }
       renderItem={({ item }) => (
         <Link href={{ pathname: '/note/[id]', params: { id: item.note.id } }} asChild>
-          <Pressable
-            accessibilityRole="button"
-            style={({ pressed }) => ({
-              paddingHorizontal: PAGE_PAD_X,
-              paddingVertical: 12,
-              gap: 6,
-              backgroundColor: pressed ? colors.fill : 'transparent',
-            })}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <Text numberOfLines={1} style={{ flex: 1, fontSize: 17, fontWeight: '600', color: colors.text }}>
-                {item.note.title}
-              </Text>
-              <Text style={{ fontSize: 13, color: colors.secondary }}>{relative(item.note.modified, now)}</Text>
-            </View>
-            {view.columns.some((c) => item.values.has(c.name)) ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-                {view.columns.map((c) => {
-                  const v = item.values.get(c.name);
-                  return v === undefined || v === '' ? null : <Chip key={c.name} column={c} value={v} />;
-                })}
+          <Pressable accessibilityRole="button">
+            {/* The row's layout sits on this view: a link replaces its child's own style. */}
+            {({ pressed }) => (
+              <View style={{ paddingHorizontal: PAGE_PAD_X, paddingVertical: 12, gap: 6, backgroundColor: pressed ? colors.fill : 'transparent' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                  <Text numberOfLines={1} style={{ flex: 1, fontSize: 17, fontWeight: '600', color: colors.text }}>
+                    {item.note.title}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.secondary }}>{relative(item.note.modified, now)}</Text>
+                </View>
+                {view.columns.some((c) => item.values.has(c.name)) ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                    {view.columns.map((c) => {
+                      const v = item.values.get(c.name);
+                      return v === undefined || v === '' ? null : <Chip key={c.name} column={c} value={v} />;
+                    })}
+                  </View>
+                ) : null}
               </View>
-            ) : null}
+            )}
           </Pressable>
         </Link>
       )}

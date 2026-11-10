@@ -12,8 +12,8 @@ const HEADING: Record<number, TextStyle> = {
 
 const MARK: TextStyle = { color: colors.tertiary };
 
-/** `**bold**` and `` `code` `` inside a line, with their marks kept and dimmed. */
-function inline(line: string, key: string): ReactNode[] {
+/** `**bold**` and `` `code` `` inside a line, with their marks dimmed, or dropped when `marks` is off. */
+function inline(line: string, key: string, marks: boolean): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
   let at = 0;
@@ -24,15 +24,15 @@ function inline(line: string, key: string): ReactNode[] {
     if (s.startsWith('**')) {
       out.push(
         <Text key={`${key}-${i}`} style={{ fontWeight: '700' }}>
-          <Text style={MARK}>**</Text>
+          {marks ? <Text style={MARK}>**</Text> : null}
           {s.slice(2, -2)}
-          <Text style={MARK}>**</Text>
+          {marks ? <Text style={MARK}>**</Text> : null}
         </Text>,
       );
     } else {
       out.push(
         <Text key={`${key}-${i}`} style={{ fontFamily: MONO, fontSize: BODY_TEXT - 2, color: colors.secondary }}>
-          {s}
+          {marks ? s : s.slice(1, -1)}
         </Text>,
       );
     }
@@ -44,9 +44,10 @@ function inline(line: string, key: string): ReactNode[] {
 
 /**
  * The body as styled spans for a text field: the characters stay exactly as typed (marks
- * included) so the caret and the saved text never drift; only their look changes.
+ * included) so the caret and the saved text never drift; only their look changes. With `marks`
+ * off it is for reading: the marks go and list dashes become bullets.
  */
-export function markdownSpans(body: string): ReactNode[] {
+export function markdownSpans(body: string, marks = true): ReactNode[] {
   const lines = body.split('\n');
   let code = false;
   return lines.map((line, n) => {
@@ -55,6 +56,7 @@ export function markdownSpans(body: string): ReactNode[] {
     const t = line.trimStart();
     if (t.startsWith('```')) {
       code = !code;
+      if (!marks) return null;
       return (
         <Text key={key} style={{ fontFamily: MONO, fontSize: BODY_TEXT - 2, color: colors.tertiary }}>
           {line + end}
@@ -73,7 +75,7 @@ export function markdownSpans(body: string): ReactNode[] {
       const level = Math.min(heading[1].length, 3);
       return (
         <Text key={key} style={HEADING[level]}>
-          <Text style={MARK}>{heading[0]}</Text>
+          {marks ? <Text style={MARK}>{heading[0]}</Text> : null}
           {line.slice(heading[0].length) + end}
         </Text>
       );
@@ -83,7 +85,7 @@ export function markdownSpans(body: string): ReactNode[] {
       const done = task[2] !== ' ';
       return (
         <Text key={key}>
-          <Text style={{ color: done ? colors.accent : colors.secondary }}>{task[1]}</Text>
+          <Text style={{ color: done ? colors.accent : colors.secondary }}>{marks ? task[1] : done ? '✓  ' : '○  '}</Text>
           <Text style={done ? { color: colors.secondary, textDecorationLine: 'line-through' } : undefined}>{task[3]}</Text>
           {end}
         </Text>
@@ -93,8 +95,8 @@ export function markdownSpans(body: string): ReactNode[] {
     if (bullet) {
       return (
         <Text key={key}>
-          <Text style={{ color: colors.secondary }}>{bullet[1]}</Text>
-          {inline(bullet[2], key)}
+          <Text style={{ color: colors.secondary }}>{marks ? bullet[1] : bullet[1].replace(/[-*] $/, '•  ')}</Text>
+          {inline(bullet[2], key, marks)}
           {end}
         </Text>
       );
@@ -102,13 +104,13 @@ export function markdownSpans(body: string): ReactNode[] {
     if (t.startsWith('>')) {
       return (
         <Text key={key} style={{ color: colors.secondary, fontStyle: 'italic' }}>
-          {line + end}
+          {(marks ? line : t.replace(/^>\s?/, '')) + end}
         </Text>
       );
     }
     return (
       <Text key={key}>
-        {inline(line, key)}
+        {inline(line, key, marks)}
         {end}
       </Text>
     );

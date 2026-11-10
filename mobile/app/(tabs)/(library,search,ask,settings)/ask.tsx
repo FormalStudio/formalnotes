@@ -1,7 +1,7 @@
 import { fetch } from 'expo/fetch';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,14 +9,13 @@ import { GlassSurface } from '@/components/glass-surface';
 import { HeaderActions } from '@/components/header-actions';
 import { Icon } from '@/components/icon';
 import { markdownSpans } from '@/components/note/markdown';
-import { NoteRow, RowSeparator } from '@/components/note-row';
 import { ask, AskError, type StreamFetch } from '@/lib/ai/ask';
 import { ai, useAi } from '@/lib/app/ai';
 import { capture } from '@/lib/app/actions';
 import { library, useLibrary } from '@/lib/app/library';
 import { haptic } from '@/lib/haptics';
 import { colors } from '@/lib/ui/colors';
-import { BODY_LINE, BODY_TEXT, PAGE_PAD_X, TAB_BAR_CLEARANCE } from '@/lib/ui/metrics';
+import { BODY_LINE, BODY_TEXT, PAGE_PAD_X } from '@/lib/ui/metrics';
 
 type Turn = {
   id: number;
@@ -42,19 +41,43 @@ const ERRORS: Record<AskError['kind'], { title: string; action?: 'settings' | 'r
   failed: { title: 'The answer stopped partway.', action: 'retry' },
 };
 
+const SUGGESTIONS = ['What did I write this week?', 'What is still open on my lists?', 'Summarize my newest note'];
+
+/** The composer's height at one line, its gap to the tab bar or the keyboard, and the room the conversation leaves for it. */
+const COMPOSER = 44;
+const SUBMIT = 34;
+const COMPOSER_GAP = 8;
+const FOOTER_CLEARANCE = COMPOSER + COMPOSER_GAP + 24;
+
 function Cites({ ids }: { ids: string[] }) {
   const notes = useLibrary((lib) => ids.flatMap((id) => lib.note(id) ?? []));
   if (notes.length === 0) return null;
   return (
-    <View style={{ marginHorizontal: -PAGE_PAD_X }}>
-      <Text style={{ paddingHorizontal: PAGE_PAD_X, paddingBottom: 2, fontSize: 13, fontWeight: '600', color: colors.secondary }}>
-        From your notes
-      </Text>
-      {notes.map((n, i) => (
-        <View key={n.id}>
-          {i > 0 ? <RowSeparator /> : null}
-          <NoteRow note={n} />
-        </View>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {notes.map((n) => (
+        <Link key={n.id} href={{ pathname: '/note/[id]', params: { id: n.id } }} asChild>
+          <Pressable accessibilityRole="link" accessibilityLabel={`Open ${n.title}`} hitSlop={6}>
+            {({ pressed }) => (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  height: 32,
+                  paddingHorizontal: 12,
+                  borderRadius: 16,
+                  backgroundColor: colors.fill,
+                  opacity: pressed ? 0.6 : 1,
+                }}
+              >
+                <Icon sf="doc.text" md="description" size={13} color={colors.secondary} />
+                <Text numberOfLines={1} style={{ maxWidth: 200, fontSize: 14, color: colors.text }}>
+                  {n.title}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </Link>
       ))}
     </View>
   );
@@ -63,23 +86,24 @@ function Cites({ ids }: { ids: string[] }) {
 function ErrorCard({ error, onRetry }: { error: AskError; onRetry: () => void }) {
   const info = ERRORS[error.kind];
   return (
-    <View style={{ gap: 8, padding: 14, borderRadius: 14, borderCurve: 'continuous', backgroundColor: colors.fill }}>
-      <Text selectable style={{ fontSize: 15, color: colors.text }}>
+    <View style={{ gap: 8, padding: 14, borderRadius: 16, borderCurve: 'continuous', backgroundColor: colors.fill }}>
+      <Text selectable style={{ fontSize: 15, lineHeight: 20, color: colors.text }}>
         {info.title}
       </Text>
       {error.kind !== 'no_key' && error.message ? (
-        <Text selectable style={{ fontSize: 13, color: colors.secondary }}>
+        <Text selectable style={{ fontSize: 13, lineHeight: 18, color: colors.secondary }}>
           {error.message}
         </Text>
       ) : null}
       {info.action ? (
         <Pressable
           accessibilityRole="button"
+          hitSlop={8}
           onPress={info.action === 'settings' ? () => router.navigate('/settings') : onRetry}
-          style={({ pressed }) => ({ alignSelf: 'flex-start', paddingVertical: 4, opacity: pressed ? 0.5 : 1 })}
+          style={({ pressed }) => ({ alignSelf: 'flex-start', opacity: pressed ? 0.5 : 1 })}
         >
           <Text style={{ fontSize: 15, fontWeight: '600', color: colors.accent }}>
-            {info.action === 'settings' ? 'Open settings' : 'Try again'}
+            {info.action === 'settings' ? 'Open Settings' : 'Try again'}
           </Text>
         </Pressable>
       ) : null}
@@ -87,21 +111,70 @@ function ErrorCard({ error, onRetry }: { error: AskError; onRetry: () => void })
   );
 }
 
-function Answer({ turn, onRetry }: { turn: Turn; onRetry: () => void }) {
+/** One exchange: the question as a bubble on the right, the answer across the column under it. */
+function Exchange({ turn, onRetry }: { turn: Turn; onRetry: () => void }) {
   const status = turn.state === 'running' ? (turn.activity ?? 'Thinking') : turn.state === 'stopped' ? 'Stopped' : null;
   return (
     <View style={{ gap: 12 }}>
-      <Text selectable style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: colors.text }}>
-        {turn.question}
-      </Text>
+      <View
+        style={{
+          alignSelf: 'flex-end',
+          maxWidth: '82%',
+          paddingHorizontal: 14,
+          paddingVertical: 9,
+          borderRadius: 20,
+          borderCurve: 'continuous',
+          backgroundColor: colors.fill,
+        }}
+      >
+        <Text selectable style={{ fontSize: 16, lineHeight: 22, color: colors.text }}>
+          {turn.question}
+        </Text>
+      </View>
       {turn.text !== '' ? (
         <Text selectable style={{ fontSize: BODY_TEXT, lineHeight: BODY_LINE, color: colors.text }}>
-          {markdownSpans(turn.text)}
+          {markdownSpans(turn.text, false)}
         </Text>
       ) : null}
-      {status ? <Text style={{ fontSize: 15, color: colors.secondary }}>{status}</Text> : null}
+      {status ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {turn.state === 'running' ? <ActivityIndicator size="small" /> : null}
+          <Text style={{ fontSize: 15, color: colors.secondary }}>{status}</Text>
+        </View>
+      ) : null}
       {turn.state instanceof AskError ? <ErrorCard error={turn.state} onRetry={onRetry} /> : null}
       <Cites ids={turn.cites} />
+    </View>
+  );
+}
+
+function Hero({ model, hasKey }: { model: string; hasKey: boolean }) {
+  return (
+    <View style={{ alignItems: 'center', gap: 8, paddingTop: 96, paddingHorizontal: 32 }}>
+      <Icon sf="sparkles" md="auto_awesome" size={34} color={colors.tertiary} />
+      <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>Ask your notes</Text>
+      <Text style={{ fontSize: 15, lineHeight: 20, color: colors.secondary, textAlign: 'center' }}>
+        {hasKey
+          ? `Answers come from ${model}, which reads only the notes it needs.`
+          : 'Add a key from Anthropic or an OpenAI-compatible provider to start.'}
+      </Text>
+      {hasKey ? null : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.navigate('/settings')}
+          style={({ pressed }) => ({
+            marginTop: 8,
+            height: 44,
+            paddingHorizontal: 20,
+            borderRadius: 22,
+            justifyContent: 'center',
+            backgroundColor: colors.accent,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>Open Settings</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -158,11 +231,14 @@ export default function Ask() {
     void run(q);
   };
 
+  const canSend = question.trim() !== '' && !running;
+  const empty = turns.length === 0;
+
   return (
     <>
       <HeaderActions
         items={
-          turns.length > 0 && !running
+          !empty && !running
             ? [
                 { kind: 'button', sf: 'square.and.pencil', md: 'edit_square', label: 'New note in Inbox', onPress: capture },
                 { kind: 'button', sf: 'arrow.counterclockwise', md: 'refresh', label: 'Clear answers', onPress: () => setTurns([]) },
@@ -171,69 +247,98 @@ export default function Ask() {
         }
       />
       <ScrollView
-        showsVerticalScrollIndicator={false}
         ref={scroll}
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
         onContentSizeChange={() => {
           if (running) scroll.current?.scrollToEnd({ animated: false });
         }}
-        contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 8, paddingBottom: 140, gap: 32 }}
+        contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 8, paddingBottom: FOOTER_CLEARANCE, gap: 24 }}
       >
-        {turns.length === 0 ? (
-          <View style={{ alignItems: 'center', gap: 8, paddingTop: 64, paddingHorizontal: 16 }}>
-            <Icon sf="sparkles" md="auto_awesome" size={34} color={colors.tertiary} />
-            <Text style={{ fontSize: 17, fontWeight: '600', color: colors.text }}>Ask your notes</Text>
-            <Text style={{ fontSize: 15, color: colors.secondary, textAlign: 'center' }}>
-              {hasKey
-                ? `Answers come from ${settings.model}, which reads only the notes it needs.`
-                : 'Add a key from Anthropic or an OpenAI-compatible provider in Settings to start.'}
-            </Text>
-            {hasKey ? null : (
-              <Pressable accessibilityRole="button" onPress={() => router.navigate('/settings')} hitSlop={8}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.accent }}>Open settings</Text>
-              </Pressable>
-            )}
-          </View>
+        {empty ? (
+          <Hero model={settings.model} hasKey={hasKey} />
         ) : (
-          turns.map((t) => <Answer key={t.id} turn={t} onRetry={() => void run(t.question)} />)
+          turns.map((t) => <Exchange key={t.id} turn={t} onRetry={() => void run(t.question)} />)
         )}
       </ScrollView>
-      <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom + 56 }} style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + TAB_BAR_CLEARANCE }}>
-        <GlassSurface
-          interactive
-          style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 6, paddingLeft: 18, borderRadius: 26, borderCurve: 'continuous' }}
-        >
-          <TextInput
-            accessibilityLabel="Question"
-            value={question}
-            onChangeText={setQuestion}
-            placeholder="Ask about your notes"
-            placeholderTextColor={colors.secondary}
-            multiline
-            submitBehavior="submit"
-            returnKeyType="send"
-            onSubmitEditing={send}
-            style={{ flex: 1, maxHeight: 120, paddingVertical: 10, fontSize: 17, color: colors.text }}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={running ? 'Stop' : 'Ask'}
-            disabled={!running && question.trim() === ''}
-            onPress={running ? () => abort.current?.abort() : send}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: running || question.trim() !== '' ? colors.accent : colors.fill,
-              opacity: pressed ? 0.7 : 1,
-            })}
+      <KeyboardStickyView
+        // In a tab the bottom inset already ends at the tab bar, so the composer rests one gap
+        // above the bar and, with the keyboard up, one gap above the keys.
+        offset={{ closed: 0, opened: insets.bottom }}
+        style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + COMPOSER_GAP, gap: 8 }}
+      >
+        {empty && hasKey ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, gap: 8 }}
           >
-            <Icon sf={running ? 'stop.fill' : 'arrow.up'} md={running ? 'stop' : 'arrow_upward'} size={18} color="white" />
-          </Pressable>
-        </GlassSurface>
+            {SUGGESTIONS.map((s) => (
+              <Pressable
+                key={s}
+                accessibilityRole="button"
+                onPress={() => {
+                  haptic('light');
+                  void run(s);
+                }}
+                style={({ pressed }) => ({
+                  height: 36,
+                  paddingHorizontal: 14,
+                  borderRadius: 18,
+                  justifyContent: 'center',
+                  backgroundColor: colors.fill,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 14, color: colors.text }}>{s}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+        <View style={{ paddingHorizontal: PAGE_PAD_X }}>
+          <GlassSurface interactive style={{ flexDirection: 'row', minHeight: COMPOSER, borderRadius: COMPOSER / 2, borderCurve: 'continuous' }}>
+            <TextInput
+              accessibilityLabel="Question"
+              value={question}
+              onChangeText={setQuestion}
+              placeholder="Ask about your notes"
+              placeholderTextColor={colors.secondary}
+              multiline
+              submitBehavior="submit"
+              returnKeyType="send"
+              onSubmitEditing={send}
+              style={{ flex: 1, maxHeight: 120, paddingLeft: 16, paddingRight: 8, paddingTop: 12, paddingBottom: 12, fontSize: 16, color: colors.text }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={running ? 'Stop' : 'Ask'}
+              disabled={!canSend && !running}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 0 }}
+              onPress={running ? () => abort.current?.abort() : send}
+              style={({ pressed }) => ({
+                width: SUBMIT,
+                height: SUBMIT,
+                margin: (COMPOSER - SUBMIT) / 2,
+                borderRadius: SUBMIT / 2,
+                alignSelf: 'flex-end',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: canSend || running ? colors.accent : colors.fill,
+                transform: [{ scale: pressed ? 0.94 : 1 }],
+              })}
+            >
+              <Icon
+                sf={running ? 'stop.fill' : 'arrow.up'}
+                md={running ? 'stop' : 'arrow_upward'}
+                size={running ? 12 : 15}
+                color={canSend || running ? 'white' : colors.tertiary}
+              />
+            </Pressable>
+          </GlassSurface>
+        </View>
       </KeyboardStickyView>
     </>
   );
