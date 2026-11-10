@@ -262,6 +262,34 @@ fn a_card_dips_while_it_is_pressed() {
     }
 }
 
+/// A folder's front panel is the system's glass, across the card's lower half, so the papers
+/// run on under it.
+#[nd::test]
+fn a_folder_front_is_glass_over_the_lower_half() {
+    use nd::components::GlassProps;
+
+    let mut rig = open();
+    let id = rig.id();
+    let panels = rig.cx.backend().find(|_, p| p.downcast_ref::<GlassProps>().is_some());
+    for folder in ["Journal", "Projects", "Reading", "Recipes"] {
+        let face = by_test_id(&mut rig.cx, id, &format!("face:folder:{folder}")).expect("a folder card").id;
+        let backend = rig.cx.backend();
+        let within = |mut n: NodeId| loop {
+            match backend.parent(n) {
+                Some(p) if p == face => return true,
+                Some(p) => n = p,
+                None => return false,
+            }
+        };
+        let fronts: Vec<_> = panels.iter().copied().filter(|&n| within(n)).collect();
+        assert_eq!(fronts.len(), 1, "{folder} has one glass front");
+        let card = backend.frame(face).expect("laid out").size;
+        let front = backend.frame(fronts[0]).expect("laid out").size;
+        assert!((front.width - card.width).abs() < 0.5, "{folder}: {front:?} spans {card:?}");
+        assert!((front.height - card.height / 2.).abs() < 1., "{folder}: {front:?} is half of {card:?}");
+    }
+}
+
 /// The node `test_id` without settling: a stopped clock would hold its motion forever.
 fn node_now(rig: &mut Rig, test_id: &str) -> Option<NodeId> {
     let tree = rig.cx.semantic_window(rig.id())?.root;
