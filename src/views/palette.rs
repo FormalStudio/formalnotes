@@ -26,9 +26,11 @@ pub enum Command {
     MoveToTrash,
     ToggleSidebar,
     Settings,
+    ViewAsCards,
+    ViewAsTable,
 }
 
-const COMMANDS: [(&str, &str, Icon); 8] = [
+const COMMANDS: [(&str, &str, Icon); 10] = [
     ("cmd:new-note", "New Note", Icon::SquarePen),
     ("cmd:new-folder", "New Folder", Icon::Folder),
     ("cmd:home", "Go Home", Icon::House),
@@ -37,6 +39,8 @@ const COMMANDS: [(&str, &str, Icon); 8] = [
     ("cmd:move-to-trash", "Move Note to Trash", Icon::Trash),
     ("cmd:sidebar", "Toggle Sidebar", Icon::PanelLeft),
     ("cmd:settings", "Settings", Icon::Settings),
+    ("cmd:view-cards", "View as Cards", Icon::Notebook),
+    ("cmd:view-table", "View as Table", Icon::ListPlus),
 ];
 
 impl Command {
@@ -53,6 +57,8 @@ impl Command {
             "cmd:move-to-trash" => Command::MoveToTrash,
             "cmd:sidebar" => Command::ToggleSidebar,
             "cmd:settings" => Command::Settings,
+            "cmd:view-cards" => Command::ViewAsCards,
+            "cmd:view-table" => Command::ViewAsTable,
             _ => return None,
         })
     }
@@ -66,7 +72,7 @@ impl Command {
             Command::MoveToTrash => shortcut(&actions::MoveToTrash),
             Command::ToggleSidebar => shortcut(&nd::actions::ToggleSidebar),
             Command::Settings => shortcut(&actions::OpenSettings),
-            Command::Open(_) | Command::Trash => None,
+            Command::Open(_) | Command::Trash | Command::ViewAsCards | Command::ViewAsTable => None,
         }
     }
 }

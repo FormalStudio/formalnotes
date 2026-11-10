@@ -20,6 +20,8 @@ actions!(
         MoveToTrash,
         OpenSettings,
         ReportIssue,
+        ViewAsCards,
+        ViewAsTable,
     ]
 );
 
@@ -33,7 +35,32 @@ macro_rules! entry_action {
 }
 
 // Each carries an entry key: `note:<path>` or `folder:<path>`.
-entry_action!(OpenEntry, RenameEntry, RevealEntry, TrashEntry, NewNoteIn, NewFolderIn, RestoreTrashed);
+entry_action!(OpenEntry, RenameEntry, RevealEntry, TrashEntry, NewNoteIn, NewFolderIn, RestoreTrashed, AddColumn);
+
+/// Does `.2` to the column `.1` of the table of folder `.0` (a folder key).
+#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
+#[schemars(crate = "nd::schemars")]
+#[action(namespace = formalnotes)]
+pub struct ColumnAction(pub String, pub String, pub ColumnOp);
+
+#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+pub enum ColumnOp {
+    /// Asks for a new name.
+    Rename,
+    RenameTo(String),
+    /// A property type's name, as `.folder.json` writes it.
+    SetType(String),
+    MoveLeft,
+    MoveRight,
+    Delete,
+}
+
+/// Removes the property `.1` from the note `.0` (a note key).
+#[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
+#[schemars(crate = "nd::schemars")]
+#[action(namespace = formalnotes)]
+pub struct RemoveProperty(pub String, pub String);
 
 /// Moves the entry `.0` into the folder `.1` (a folder path, `""` for Home).
 #[derive(Clone, PartialEq, Debug, Deserialize, JsonSchema, Action)]
@@ -114,6 +141,9 @@ pub fn init(cx: &mut App) {
                 MenuItem::action("Search Notes", Search),
                 MenuItem::action("Command Palette", OpenPalette),
                 MenuItem::action("Trash", OpenTrash),
+                MenuItem::separator(),
+                MenuItem::action("as Cards", ViewAsCards),
+                MenuItem::action("as Table", ViewAsTable),
                 MenuItem::separator(),
                 MenuItem::role(MenuRole::ToggleSidebar),
             ]),

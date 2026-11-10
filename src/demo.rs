@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use crate::library::disk;
+use crate::library::view::VIEW_FILE;
 
 pub fn enabled() -> bool {
     std::env::var_os("FORMALNOTES_DEMO").is_some()
@@ -12,6 +13,23 @@ pub fn enabled() -> bool {
 
 /// Folders, then notes as (path, minutes since last edit, text).
 const FOLDERS: &[&str] = &["Projects", "Projects/Launch", "Journal", "Reading", "Recipes"];
+
+/// Folders shown as a table, with their `.folder.json`.
+const VIEWS: &[(&str, &str)] = &[(
+    "Reading",
+    r#"{
+  "v": 1,
+  "view": "table",
+  "columns": [
+    { "name": "Status", "type": "select", "options": ["To read", "Reading", "Finished"], "width": 110 },
+    { "name": "Author", "type": "text", "width": 150 },
+    { "name": "Rating", "type": "number", "width": 70 },
+    { "name": "Finished", "type": "date", "width": 120 },
+    { "name": "Tags", "type": "multi_select", "options": ["design", "architecture", "work", "classic"], "width": 140 }
+  ]
+}
+"#,
+)];
 
 const NOTES: &[(&str, u64, &str)] = &[
     (
@@ -90,6 +108,26 @@ const NOTES: &[(&str, u64, &str)] = &[
         "# Articles\n\n- On writing tools that respect your files\n- Why plain text lasts\n- The cost of a notification\n\nSave the long ones for the train.",
     ),
     (
+        "Reading/The Design of Everyday Things.md",
+        60 * 30,
+        "---\nStatus: Finished\nAuthor: Don Norman\nRating: 5\nFinished: 2026-09-12\nTags: [design, classic]\n---\n# The Design of Everyday Things\n\nDoors that need a sign have already failed.",
+    ),
+    (
+        "Reading/A Pattern Language.md",
+        60 * 6,
+        "---\nStatus: Reading\nAuthor: Christopher Alexander\nTags: [architecture, design]\n---\n# A Pattern Language\n\nPattern 159: light on two sides of every room.",
+    ),
+    (
+        "Reading/How Buildings Learn.md",
+        60 * 75,
+        "---\nStatus: To read\nAuthor: Stewart Brand\nTags: [architecture]\n---\n# How Buildings Learn\n\nRecommended twice this month.",
+    ),
+    (
+        "Reading/Shop Class as Soulcraft.md",
+        60 * 140,
+        "---\nStatus: Finished\nAuthor: Matthew B. Crawford\nRating: 4\nFinished: 2026-07-30\nTags: [work]\n---\n# Shop Class as Soulcraft\n\nOn the satisfaction of work you can see.",
+    ),
+    (
         "Recipes/Lentil soup.md",
         60 * 48,
         "# Lentil soup\n\n## Ingredients\n\n- 250 g red lentils\n- 1 onion, 2 carrots\n- 1 tin of tomatoes\n- Cumin, smoked paprika\n\n## Method\n\nSoften the onion and carrots, add the spices, then the lentils and a litre of stock. Simmer for 25 minutes.",
@@ -146,6 +184,9 @@ pub fn seed_into(root: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(root)?;
     for folder in FOLDERS {
         std::fs::create_dir_all(root.join(folder))?;
+    }
+    for (folder, json) in VIEWS {
+        std::fs::write(root.join(folder).join(VIEW_FILE), json)?;
     }
     let now = SystemTime::now();
     for (path, minutes, text) in NOTES {

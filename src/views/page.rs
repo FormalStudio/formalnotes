@@ -8,6 +8,7 @@ use super::format;
 use super::metrics::*;
 use super::motion;
 use super::root::FormalNotes;
+use super::table::TableView;
 use crate::actions::*;
 use crate::library::{EntryId, FolderId, Library};
 use crate::nav::{ENTRY_DRAG, Location, card_id, dragged_entry, entry_key, face_id, folder_key, frame_id};
@@ -17,9 +18,11 @@ impl FormalNotes {
     /// The page for the location, keyed by it: a new page rises in as the one it replaces fades
     /// out where it stood, so Home, folders and the trash cross over rather than cut. Under a
     /// closing note it only fades in, so the card the note goes back into holds still.
-    pub(super) fn render_page(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let (key, page) = match self.location.clone() {
-            Location::Folder(folder) => (format!("page:{}", folder_key(&folder)), self.folder_page(&folder, cx)),
+            Location::Folder(folder) => {
+                (format!("page:{}", folder_key(&folder)), self.folder_page(&folder, window, cx))
+            }
             Location::Trash => ("page:trash".to_owned(), self.trash_page(cx)),
         };
         // The window opens with its page in place: only a page after the first comes in.
@@ -35,7 +38,19 @@ impl FormalNotes {
             .into_any_element()
     }
 
-    fn folder_page(&self, folder: &FolderId, cx: &mut Context<Self>) -> AnyElement {
+    fn folder_page(&mut self, folder: &FolderId, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        if self.store.read(cx).library().is_table(folder) {
+            let table = match &self.table {
+                Some(t) if t.read(cx).folder() == folder => t.clone(),
+                _ => {
+                    let store = self.store.clone();
+                    let t = cx.new(|cx| TableView::new(store, folder.clone(), window, cx));
+                    self.table = Some(t.clone());
+                    t
+                }
+            };
+            return v_flex().id("page").size_full().child(table).into_any_element();
+        }
         let theme = cx.theme().clone();
         let sort = Self::sort(cx);
         let now = Timestamp::now();
@@ -82,21 +97,8 @@ impl FormalNotes {
                     beside_folders,
                 },
             );
-            let menu_key = entry_key(&entry).to_string();
-            let destinations = move_targets(&library, &n.id.folder());
-            let face = face.context_menu(move |menu, _, _| {
-                let move_to = Menu::new("Move To").items(
-                    destinations
-                        .iter()
-                        .map(|(name, path)| MenuItem::action(name.clone(), MoveEntry(menu_key.clone(), path.clone()))),
-                );
-                menu.item("Open", OpenEntry(menu_key.clone()))
-                    .item("Rename…", RenameEntry(menu_key.clone()))
-                    .item(reveal_label(), RevealEntry(menu_key.clone()))
-                    .submenu(move_to)
-                    .separator()
-                    .item_destructive("Move to Trash", TrashEntry(menu_key.clone()))
-            });
+            let face =
+                face.context_menu(note_menu(entry_key(&entry).to_string(), move_targets(&library, &n.id.folder())));
             tiles.push(self.tile(entry, face, cx));
         }
 
@@ -198,31 +200,6 @@ impl FormalNotes {
     fn header(&self, folder: &FolderId, count: usize, cx: &mut Context<Self>) -> Div {
         let theme = cx.theme().clone();
         let sort = cx.settings::<NotesSettings>().sort;
-        let mut crumbs = h_flex().gap(px(6.)).items_center().min_w_0();
-        if folder.is_root() {
-            crumbs = crumbs.child(page_title(&theme, "Home"));
-        } else {
-            let mut trail = vec![FolderId::root()];
-            trail.extend(folder.ancestry());
-            let last = trail.len() - 1;
-            for (i, f) in trail.into_iter().enumerate() {
-                let name = if f.is_root() { "Home".to_owned() } else { f.name().to_owned() };
-                if i == last {
-                    crumbs = crumbs.child(page_title(&theme, &name));
-                } else {
-                    crumbs = crumbs
-                        .child(
-                            div()
-                                .id(format!("crumb:{}", folder_key(&f)))
-                                .on_tap(cx.listener(move |this, _: &TapEvent, _, cx| {
-                                    this.go(Location::Folder(f.clone()), cx)
-                                }))
-                                .child(text(name).text_size(theme.type_scale.title).text_color(theme.text.secondary)),
-                        )
-                        .child(icon(Icon::ChevronRight, 12.).text_color(theme.text.tertiary));
-                }
-            }
-        }
         let mut sort_button = menu_button("sort", Icon::ChevronDown, move |menu, _, _| {
             SortOrder::ALL.into_iter().fold(menu, |menu, order| {
                 menu.entry(MenuItem::action(order.label(), SetSort(order)).checked(order == sort))
@@ -236,7 +213,7 @@ impl FormalNotes {
             .px(px(PAGE_PAD_X + 2.))
             .gap(theme.spacing.md)
             .items_center()
-            .child(crumbs)
+            .child(crumbs(&theme, folder))
             .child(text(format::items(count)).id("page-count").text_color(theme.text.secondary))
             .child(div().flex_1())
             .child(sort_button)
@@ -331,8 +308,58 @@ fn page_title(theme: &Theme, title: &str) -> Text {
         .truncate()
 }
 
+/// A folder page's title: the path of crumbs from Home, each opening its folder.
+pub(super) fn crumbs(theme: &Theme, folder: &FolderId) -> Div {
+    let mut crumbs = h_flex().gap(px(6.)).items_center().min_w_0();
+    if folder.is_root() {
+        return crumbs.child(page_title(theme, "Home"));
+    }
+    let mut trail = vec![FolderId::root()];
+    trail.extend(folder.ancestry());
+    let last = trail.len() - 1;
+    for (i, f) in trail.into_iter().enumerate() {
+        let name = if f.is_root() { "Home".to_owned() } else { f.name().to_owned() };
+        if i == last {
+            crumbs = crumbs.child(page_title(theme, &name));
+            continue;
+        }
+        let key = folder_key(&f).to_string();
+        crumbs = crumbs
+            .child(
+                div()
+                    .id(format!("crumb:{key}"))
+                    .on_tap(move |_: &TapEvent, window, cx| {
+                        cx.dispatch_action(window.id(), &OpenEntry(key.clone()));
+                    })
+                    .child(text(name).text_size(theme.type_scale.title).text_color(theme.text.secondary)),
+            )
+            .child(icon(Icon::ChevronRight, 12.).text_color(theme.text.tertiary));
+    }
+    crumbs
+}
+
+/// A note's context menu, on its card and on its table row.
+pub(super) fn note_menu(
+    key: String,
+    destinations: Vec<(String, String)>,
+) -> impl Fn(ContextMenu, &mut Window, &mut App) -> ContextMenu + 'static {
+    move |menu, _, _| {
+        let move_to = Menu::new("Move To").items(
+            destinations
+                .iter()
+                .map(|(name, path)| MenuItem::action(name.clone(), MoveEntry(key.clone(), path.clone()))),
+        );
+        menu.item("Open", OpenEntry(key.clone()))
+            .item("Rename…", RenameEntry(key.clone()))
+            .item(reveal_label(), RevealEntry(key.clone()))
+            .submenu(move_to)
+            .separator()
+            .item_destructive("Move to Trash", TrashEntry(key.clone()))
+    }
+}
+
 /// The folders a note can move to, by display name and path: Home and every folder but its own.
-fn move_targets(library: &Library, from: &FolderId) -> Vec<(String, String)> {
+pub(super) fn move_targets(library: &Library, from: &FolderId) -> Vec<(String, String)> {
     let mut out = Vec::new();
     if !from.is_root() {
         out.push(("Home".to_owned(), String::new()));

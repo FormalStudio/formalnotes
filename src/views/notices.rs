@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use nd::prelude::*;
 
-use crate::library::{EntryId, FolderId};
+use crate::library::{EntryId, FolderId, FolderView, NoteId};
 
 /// What a toast's Undo does.
 #[derive(Clone, Debug, PartialEq)]
@@ -15,6 +15,12 @@ pub enum Undo {
     Trash(EntryId),
     /// Move the entry back to the folder it came from.
     Move(EntryId, FolderId),
+    /// Put the folder's view back as it was.
+    View(FolderId, Box<FolderView>),
+    /// Rename the folder's column back: from its new name to its old one.
+    RenameColumn(FolderId, String, String),
+    /// Put the note's property back as it was written, or remove it.
+    Property(NoteId, String, Option<String>),
 }
 
 #[derive(Default)]

@@ -12,11 +12,13 @@ use super::editor::{BODY, Editor};
 use super::notices::{Notices, Undo};
 use super::palette::{self, Command, Mode};
 use crate::actions::*;
+use crate::library::properties::{self, PropType};
 use crate::library::{EntryId, FolderId, NoteId, Sort, Store};
 use crate::nav::{Location, parse_entry};
 use crate::settings::{NotesSettings, SortOrder, ThemeChoice};
 
 const RENAME_FIELD: &str = "rename-field";
+pub const VIEW_MODE: &str = "view-mode";
 
 pub struct FormalNotes {
     pub(super) store: Entity<Store>,
@@ -45,6 +47,8 @@ pub struct FormalNotes {
     notices: Notices,
     rename: Option<(EntryId, Entity<TextFieldState>)>,
     seen_failures: usize,
+    /// The table of the folder on screen, when it shows as one.
+    pub(super) table: Option<Entity<super::table::TableView>>,
     /// A demo library ignores the library setting.
     fixed_root: bool,
     theme: Option<ThemeChoice>,
@@ -89,6 +93,7 @@ impl FormalNotes {
             notices: Notices::default(),
             rename: None,
             seen_failures: 0,
+            table: None,
             fixed_root,
             theme: None,
         }
@@ -126,7 +131,117 @@ impl FormalNotes {
     /// The rows the palette shows now.
     pub fn palette_rows(&self, cx: &App) -> Vec<PaletteItem> {
         let mode = self.palette.unwrap_or(Mode::Commands);
-        palette::items(self.store.read(cx).library(), mode, &self.palette_query, self.open.is_some())
+        let mut rows = palette::items(self.store.read(cx).library(), mode, &self.palette_query, self.open.is_some());
+        // Only the view the folder on screen can switch to.
+        let table = self.page_folder().map(|f| self.store.read(cx).library().is_table(f));
+        rows.retain(|r| match r.id.as_ref() {
+            "cmd:view-cards" => table == Some(true),
+            "cmd:view-table" => table == Some(false),
+            _ => true,
+        });
+        rows
+    }
+
+    fn page_folder(&self) -> Option<&FolderId> {
+        match &self.location {
+            Location::Folder(folder) => Some(folder),
+            Location::Trash => None,
+        }
+    }
+
+    pub fn table(&self) -> Option<&Entity<super::table::TableView>> {
+        self.table.as_ref()
+    }
+
+    /// Shows the folder on screen as a table or as cards, remembered in its `.folder.json`.
+    pub fn set_view_mode(&mut self, table: bool, cx: &mut Context<Self>) {
+        let Some(folder) = self.page_folder().cloned() else { return };
+        let mut view = self.store.read(cx).view(&folder);
+        if view.is_table() == table {
+            return;
+        }
+        view.set_table(table);
+        self.hovered = None;
+        self.store.update(cx, |s, cx| s.set_view(&folder, view, cx));
+        cx.notify();
+    }
+
+    /// The table of `folder`, when it is the one on screen.
+    fn table_of(&self, folder: &FolderId, cx: &App) -> Option<Entity<super::table::TableView>> {
+        self.table.clone().filter(|t| t.read(cx).folder() == folder)
+    }
+
+    fn column_action(&mut self, action: &ColumnAction, window: &mut Window, cx: &mut Context<Self>) {
+        let ColumnAction(key, name, op) = action;
+        let Some(EntryId::Folder(folder)) = parse_entry(key) else { return };
+        let before = self.store.read(cx).view(&folder);
+        let Some(column) = before.column(name).cloned() else { return };
+        let mut view = before.clone();
+        match op {
+            ColumnOp::Rename => {
+                if let Some(table) = self.table_of(&folder, cx) {
+                    table.update(cx, |t, cx| t.start_rename(name, window, cx));
+                }
+                return;
+            }
+            ColumnOp::RenameTo(to) => {
+                if self.store.update(cx, |s, cx| s.rename_column(&folder, name, to, cx)) {
+                    let undo = Undo::RenameColumn(folder, to.clone(), name.clone());
+                    self.notices.show(format!("Renamed “{name}” to “{to}”"), Some(undo));
+                }
+                cx.notify();
+                return;
+            }
+            ColumnOp::SetType(kind) => {
+                let Some(kind) = PropType::parse(kind).filter(|k| *k != column.prop_type()) else { return };
+                if let Some(c) = view.column_mut(name) {
+                    c.kind = kind.as_str().to_owned();
+                }
+                let label = kind.label().to_lowercase();
+                self.notices
+                    .show(format!("“{name}” is now {label}"), Some(Undo::View(folder.clone(), Box::new(before))));
+            }
+            ColumnOp::MoveLeft => view.move_column(name, -1),
+            ColumnOp::MoveRight => view.move_column(name, 1),
+            ColumnOp::Delete => {
+                view.remove_column(name);
+                self.notices.show(format!("Deleted “{name}”"), Some(Undo::View(folder.clone(), Box::new(before))));
+            }
+        }
+        self.store.update(cx, |s, cx| s.set_view(&folder, view, cx));
+        cx.notify();
+    }
+
+    fn add_column(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(EntryId::Folder(folder)) = parse_entry(key) else { return };
+        if let Some(table) = self.table_of(&folder, cx) {
+            table.update(cx, |t, cx| t.start_add(window, cx));
+        }
+    }
+
+    fn remove_property(&mut self, key: &str, name: &str, cx: &mut Context<Self>) {
+        let Some(EntryId::Note(note)) = parse_entry(key) else { return };
+        let Some(lines) = self.store.read(cx).note(&note).and_then(|n| properties::entry(&n.text, name)) else {
+            return;
+        };
+        self.store.update(cx, |s, cx| s.set_property(&note, name, None, cx));
+        self.notices.show(format!("Removed “{name}”"), Some(Undo::Property(note, name.to_owned(), Some(lines))));
+        cx.notify();
+    }
+
+    fn undo(&mut self, undo: Undo, cx: &mut Context<Self>) {
+        match undo {
+            Undo::Restore(name) => self.restore(&name, cx),
+            Undo::Trash(entry) => self.trash(&entry, cx),
+            Undo::Move(entry, back) => self.move_entry(&entry, &back, cx),
+            Undo::View(folder, view) => self.store.update(cx, |s, cx| s.set_view(&folder, *view, cx)),
+            Undo::RenameColumn(folder, from, to) => {
+                self.store.update(cx, |s, cx| s.rename_column(&folder, &from, &to, cx));
+            }
+            Undo::Property(note, name, lines) => {
+                self.store.update(cx, |s, cx| s.put_property(&note, &name, lines.as_deref(), cx))
+            }
+        }
     }
 
     pub(super) fn sort(cx: &App) -> Sort {
@@ -434,6 +549,8 @@ impl FormalNotes {
             }
             Command::ToggleSidebar => cx.window_command(window.id(), nd::backend::WindowCommand::ToggleSidebar),
             Command::Settings => self.open_settings(cx),
+            Command::ViewAsCards => self.set_view_mode(false, cx),
+            Command::ViewAsTable => self.set_view_mode(true, cx),
         }
     }
 
@@ -508,6 +625,11 @@ impl FormalNotes {
                 }
             }))
             .on_action(cx.listener(|_, a: &SetSort, _, cx| Self::set_sort(a.0, cx)))
+            .on_action(cx.listener(|this, _: &ViewAsCards, _, cx| this.set_view_mode(false, cx)))
+            .on_action(cx.listener(|this, _: &ViewAsTable, _, cx| this.set_view_mode(true, cx)))
+            .on_action(cx.listener(|this, a: &ColumnAction, window, cx| this.column_action(a, window, cx)))
+            .on_action(cx.listener(|this, a: &AddColumn, window, cx| this.add_column(&a.0, window, cx)))
+            .on_action(cx.listener(|this, a: &RemoveProperty, _, cx| this.remove_property(&a.0, &a.1, cx)))
     }
 
     fn render_palette(&self, cx: &mut Context<Self>) -> CommandPalette {
@@ -603,11 +725,10 @@ impl Render for FormalNotes {
                 this.notices.dismissed(&e.id);
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, e: &ToastActionClicked, _, cx| match this.notices.take_undo(&e.id) {
-                Some(Undo::Restore(name)) => this.restore(&name, cx),
-                Some(Undo::Trash(entry)) => this.trash(&entry, cx),
-                Some(Undo::Move(entry, back)) => this.move_entry(&entry, &back, cx),
-                None => {}
+            .on_action(cx.listener(|this, e: &ToastActionClicked, _, cx| {
+                if let Some(undo) = this.notices.take_undo(&e.id) {
+                    this.undo(undo, cx);
+                }
             }));
         let content = div()
             .size_full()
@@ -629,17 +750,27 @@ impl Render for FormalNotes {
             .children(rename);
         // The page and the note carry their own headings, so the toolbar shows no title; the
         // window still takes one for the Window menu, Mission Control and VoiceOver.
+        let toolbar = toolbar()
+            .title(self.window_title(cx))
+            .hide_title()
+            .sidebar_toggle()
+            .flexible_space()
+            .item(icon_button("new-folder", Icon::FolderPlus).tooltip("New Folder").dispatch(NewFolder))
+            .item(icon_button("new-note", Icon::SquarePen).tooltip("New Note").dispatch(NewNote))
+            .item(icon_button("search", Icon::Search).tooltip("Search Notes").dispatch(Search));
+        // Last, so the items before it keep their places when it comes and goes.
+        let toolbar = match self.page_folder().map(|f| self.store.read(cx).library().is_table(f)) {
+            Some(table) => toolbar.labeled_item(
+                "View",
+                segmented(VIEW_MODE, ["Cards", "Table"])
+                    .selected(usize::from(table))
+                    .label("View")
+                    .on_change(cx.listener(|this, e: &SelectChanged, _, cx| this.set_view_mode(e.index == 1, cx))),
+            ),
+            None => toolbar,
+        };
         let scaffold = scaffold()
-            .toolbar(
-                toolbar()
-                    .title(self.window_title(cx))
-                    .hide_title()
-                    .sidebar_toggle()
-                    .flexible_space()
-                    .item(icon_button("new-folder", Icon::FolderPlus).tooltip("New Folder").dispatch(NewFolder))
-                    .item(icon_button("new-note", Icon::SquarePen).tooltip("New Note").dispatch(NewNote))
-                    .item(icon_button("search", Icon::Search).tooltip("Search Notes").dispatch(Search)),
-            )
+            .toolbar(toolbar)
             .sidebar(
                 nd::components::sidebar()
                     .resizable()

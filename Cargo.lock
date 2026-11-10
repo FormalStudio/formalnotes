@@ -2078,6 +2078,7 @@ dependencies = [
  "flume",
  "jiff",
  "nd",
+ "nd-test",
  "notify",
  "serde",
  "serde_json",
@@ -4621,6 +4622,21 @@ dependencies = [
  "objc2-quartz-core 0.3.2",
  "portable-pty",
  "swash",
+]
+
+[[package]]
+name = "nd-test"
+version = "0.6.1"
+source = "git+https://github.com/FormalStudio/NativeDesktop?branch=main#9b7799f1fb0fc3fe2978f9b2cb7b428a4d84a8d1"
+dependencies = [
+ "nd-automation",
+ "nd-core",
+ "nd-ui",
+ "ndshell",
+ "regex",
+ "serde",
+ "serde_json",
+ "windows 0.62.2",
 ]
 
 [[package]]

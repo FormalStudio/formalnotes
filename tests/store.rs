@@ -34,7 +34,8 @@ fn titles_come_from_the_heading_or_the_file_name() {
     assert_eq!(library.note(&NoteId("Weekend plans.md".into())).unwrap().title, "Weekend plans");
     assert_eq!(library.note(&NoteId("Reading notes.md".into())).unwrap().title, "Reading notes", "no heading");
     assert!(library.has_folder(&FolderId("Projects/Launch".into())));
-    assert_eq!(library.notes.len(), 20);
+    assert_eq!(library.notes.len(), 24);
+    assert!(library.is_table(&FolderId("Reading".into())), "the demo has a table folder");
 }
 
 #[nd::test]

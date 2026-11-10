@@ -23,6 +23,10 @@ pub fn items(n: usize) -> String {
     if n == 1 { "1 item".to_owned() } else { format!("{n} items") }
 }
 
+pub fn notes(n: usize) -> String {
+    if n == 1 { "1 note".to_owned() } else { format!("{n} notes") }
+}
+
 pub fn words(n: usize) -> String {
     if n == 1 { "1 word".to_owned() } else { format!("{n} words") }
 }

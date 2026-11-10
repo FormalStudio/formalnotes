@@ -10,6 +10,7 @@ use nd::prelude::*;
 
 use super::format;
 use super::metrics::*;
+use super::strip::PropertyStrip;
 use crate::library::model::{compose, split, word_count};
 use crate::library::{NoteId, Store};
 use crate::settings::NotesSettings;
@@ -32,6 +33,8 @@ pub struct Editor {
     heading: bool,
     body: Entity<TextFieldState>,
     title: Entity<TextFieldState>,
+    /// The note's properties, between the title and the body.
+    strip: Entity<PropertyStrip>,
     editing_title: bool,
     /// The text last read from or sent to the store: anything else there came from outside.
     synced: Arc<str>,
@@ -60,7 +63,9 @@ impl Editor {
         })
         .detach();
         cx.observe(&store, |this, _, cx| this.store_changed(cx)).detach();
+        let strip = cx.new(|cx| PropertyStrip::new(store.clone(), window, cx));
         Self {
+            strip,
             store,
             note: None,
             shown: None,
@@ -100,15 +105,17 @@ impl Editor {
         }
         self.store.update(cx, |store, _| store.flush());
         self.note = Some(id.clone());
-        self.shown = Some(id);
+        self.shown = Some(id.clone());
         self.editing_title = false;
+        self.strip.update(cx, |s, cx| s.show(Some(id), cx));
         self.load(window, cx);
     }
 
     /// The note moved (renamed, or its folder did): keep editing it at its new path.
     pub fn follow(&mut self, id: NoteId, cx: &mut Context<Self>) {
         self.note = Some(id.clone());
-        self.shown = Some(id);
+        self.shown = Some(id.clone());
+        self.strip.update(cx, |s, cx| s.show(Some(id), cx));
         cx.notify();
     }
 
@@ -191,6 +198,7 @@ impl Editor {
         }
         self.note = Some(moved.clone());
         self.shown = Some(moved.clone());
+        self.strip.update(cx, |s, cx| s.show(Some(moved.clone()), cx));
         cx.notify();
         if moved != id {
             (self.on_renamed)(moved, window, cx);
@@ -263,6 +271,7 @@ impl Render for Editor {
                 });
             })
             .child(in_column(heading))
+            .child(in_column(div().mt(px(PROPERTIES_GAP)).child(self.strip.clone()).into_any_element()))
             .child(
                 markdown_editor(BODY, &self.body)
                     .borderless()

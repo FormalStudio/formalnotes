@@ -54,6 +54,8 @@ pub const TITLE_LINE: f32 = 55.;
 pub const EDITOR_MARGIN: f32 = 66.;
 pub const EDITOR_TOP: f32 = 48.;
 pub const TITLE_GAP: f32 = 22.;
+/// Between the title and the note's properties under it.
+pub const PROPERTIES_GAP: f32 = 4.;
 
 /// How many cards a row of `avail` points holds with `gap` between them: four or more once
 /// four 200-point cards fit (each then at least 240), otherwise one to three of at least 160.
