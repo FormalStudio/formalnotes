@@ -52,12 +52,16 @@ pub struct FormalNotes {
     /// A demo library ignores the library setting.
     fixed_root: bool,
     theme: Option<ThemeChoice>,
+    sync_status: Entity<super::sync_status::SyncStatus>,
 }
 
 impl FormalNotes {
     /// The window over the library at `root`; `fixed_root` keeps it there whatever the settings
     /// say (the demo library).
     pub fn new(root: PathBuf, fixed_root: bool, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        if !fixed_root {
+            crate::sync::follow_library(cx, Some(root.clone()));
+        }
         let store = cx.new(|cx| Store::new(root, cx));
         let this = cx.weak_entity();
         let editor = cx.new(|cx| {
@@ -96,6 +100,7 @@ impl FormalNotes {
             table: None,
             fixed_root,
             theme: None,
+            sync_status: cx.new(super::sync_status::SyncStatus::new),
         }
     }
 
@@ -249,6 +254,8 @@ impl FormalNotes {
     }
 
     fn store_changed(&mut self, store: Entity<Store>, cx: &mut Context<Self>) {
+        let unsaved = store.read(cx).unsaved();
+        crate::sync::set_unsaved(cx, unsaved);
         let failures = store.read(cx).failures();
         let fresh: Vec<String> = failures.get(self.seen_failures..).unwrap_or_default().to_vec();
         self.seen_failures = failures.len();
@@ -512,6 +519,7 @@ impl FormalNotes {
             if self.store.read(cx).root() != root {
                 self.close_note(cx);
                 self.location = Location::home();
+                crate::sync::follow_library(cx, Some(root.clone()));
                 self.store.update(cx, |store, cx| store.open(root, cx));
             }
         }
@@ -782,7 +790,7 @@ impl Render for FormalNotes {
                         cx.notify();
                     }))
                     .child(sidebar)
-                    .footer(trash),
+                    .footer(v_flex().child(trash).child(self.sync_status.clone())),
             )
             .content(content)
             .content_min_width(super::metrics::CONTENT_MIN)

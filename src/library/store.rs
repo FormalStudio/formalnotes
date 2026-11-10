@@ -79,6 +79,11 @@ impl Store {
         &self.failures
     }
 
+    /// The notes with edits the worker has not written yet, by path.
+    pub fn unsaved(&self) -> std::collections::HashSet<String> {
+        self.edits.keys().map(|id| id.0.clone()).collect()
+    }
+
     /// Whether `id` has edits the worker has not written yet.
     pub fn is_dirty(&self, id: &NoteId) -> bool {
         self.edits.contains_key(id)
