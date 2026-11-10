@@ -109,3 +109,81 @@ fn paths_outside_the_library_are_refused() {
     settle(&mut cx, &store);
     assert!(store.read(&cx).failures().is_empty());
 }
+
+#[nd::test]
+fn a_folder_view_is_written_read_back_and_keeps_unknown_keys() {
+    use formalnotes::library::{Column, FolderView, PropType};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir(root.join("Tasks")).unwrap();
+    std::fs::write(root.join("Tasks/.folder.json"), r#"{"v":1,"view":"cards","columns":[],"layout":{"x":1}}"#).unwrap();
+    let mut cx = TestApp::new();
+    let store = store(&mut cx, root);
+    let tasks = FolderId("Tasks".into());
+    assert!(!store.read(&cx).library().is_table(&tasks));
+
+    let mut view = store.read(&cx).view(&tasks);
+    view.set_table(true);
+    view.columns.push(Column::new("status", PropType::Select));
+    store.update(&mut cx, |s, cx| s.set_view(&tasks, view, cx));
+    settle(&mut cx, &store);
+    let written: serde_json::Value = serde_json::from_str(&read(root, "Tasks/.folder.json")).unwrap();
+    assert_eq!(written["view"], "table");
+    assert_eq!(written["columns"][0]["type"], "select");
+    assert_eq!(written["layout"]["x"], 1, "unknown keys survive the rewrite");
+    assert!(store.read(&cx).library().is_table(&tasks), "the snapshot after the write agrees");
+    assert!(std::fs::read_dir(root.join("Tasks")).unwrap().count() == 1, "no temp file left");
+
+    // Another app changes it: the watcher picks it up.
+    std::fs::write(root.join("Tasks/.folder.json"), r#"{"v":1,"view":"cards"}"#).unwrap();
+    std::thread::sleep(Duration::from_millis(400));
+    settle(&mut cx, &store);
+    assert!(!store.read(&cx).library().is_table(&tasks), "an outside edit is read");
+    assert_eq!(store.read(&cx).view(&tasks), FolderView::parse(br#"{"v":1,"view":"cards"}"#).unwrap());
+
+    // The view moves with its folder.
+    let moved = store.update(&mut cx, |s, cx| s.rename_folder(&tasks, "Todo", cx));
+    assert!(store.read(&cx).library().view(&moved).is_some());
+    settle(&mut cx, &store);
+    assert!(store.read(&cx).library().view(&moved).is_some());
+}
+
+#[nd::test]
+fn properties_and_columns_reach_the_notes() {
+    use formalnotes::library::{Column, PropType, Value};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir(root.join("Tasks")).unwrap();
+    std::fs::write(root.join("Tasks/A.md"), "---\nstatus: Doing\nkeep: [x]\n---\n# A\n").unwrap();
+    std::fs::write(root.join("Tasks/B.md"), "# B\n\nbody").unwrap();
+    std::fs::write(root.join("Other.md"), "---\nstatus: Elsewhere\n---\n").unwrap();
+    let mut cx = TestApp::new();
+    let store = store(&mut cx, root);
+    let tasks = FolderId("Tasks".into());
+    let (a, b) = (NoteId("Tasks/A.md".into()), NoteId("Tasks/B.md".into()));
+
+    store.update(&mut cx, |s, cx| s.set_property(&b, "done", Some(&Value::Checkbox(true)), cx));
+    settle(&mut cx, &store);
+    assert_eq!(read(root, "Tasks/B.md"), "---\ndone: true\n---\n# B\n\nbody", "written at once");
+    assert_eq!(store.read(&cx).note(&b).unwrap().title, "B");
+
+    let mut view = store.read(&cx).view(&tasks);
+    view.columns.push(Column::new("status", PropType::Select));
+    store.update(&mut cx, |s, cx| s.set_view(&tasks, view, cx));
+    assert!(store.update(&mut cx, |s, cx| s.rename_column(&tasks, "status", "state", cx)));
+    settle(&mut cx, &store);
+    assert_eq!(read(root, "Tasks/A.md"), "---\nstate: Doing\nkeep: [x]\n---\n# A\n");
+    assert_eq!(read(root, "Other.md"), "---\nstatus: Elsewhere\n---\n", "only the folder's notes");
+    assert!(store.read(&cx).view(&tasks).column("state").is_some());
+
+    let mut view = store.read(&cx).view(&tasks);
+    view.remove_column("state");
+    store.update(&mut cx, |s, cx| s.set_view(&tasks, view, cx));
+    settle(&mut cx, &store);
+    assert_eq!(read(root, "Tasks/A.md"), "---\nstate: Doing\nkeep: [x]\n---\n# A\n", "deleting a column leaves notes");
+
+    store.update(&mut cx, |s, cx| s.set_property(&a, "state", None, cx));
+    store.update(&mut cx, |s, cx| s.set_property(&a, "keep", None, cx));
+    settle(&mut cx, &store);
+    assert_eq!(read(root, "Tasks/A.md"), "# A\n", "the empty block goes with its fences");
+}

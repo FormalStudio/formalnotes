@@ -133,8 +133,10 @@ impl Editor {
 
     fn body_edited(&mut self, body: String, cx: &mut Context<Self>) {
         let Some(id) = self.note.clone() else { return };
+        let Some(current) = self.store.read(cx).note(&id).map(|n| n.text.clone()) else { return };
         let title = self.store.read(cx).note(&id).map(|n| n.title.clone()).unwrap_or_default();
-        let text = compose(self.heading.then_some(title.as_str()), &body);
+        // The properties are edited apart; whatever the store holds for them now stays.
+        let text = compose(split(&current).front, self.heading.then_some(title.as_str()), &body);
         self.words = word_count(&text);
         self.synced = Arc::from(text.as_str());
         self.store.update(cx, |store, cx| store.edit(&id, text, cx));
@@ -153,8 +155,13 @@ impl Editor {
         let parts = split(&text);
         self.heading = parts.heading.is_some();
         let body = parts.body.to_owned();
+        let body_changed = body != split(&self.synced).body;
         self.words = word_count(&text);
         self.synced = text;
+        if !body_changed {
+            cx.notify();
+            return;
+        }
         // Setting a field's text takes a window, which an observer has none of: the next
         // render applies it.
         self.reload = Some(body);

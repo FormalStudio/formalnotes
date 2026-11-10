@@ -7,6 +7,9 @@ use std::sync::Arc;
 
 use jiff::Timestamp;
 
+use super::properties;
+use super::view::FolderView;
+
 /// A folder by its path under the root, `/`-separated. The root itself (Home) is `""`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FolderId(pub String);
@@ -163,6 +166,8 @@ pub struct Library {
     pub folders: BTreeMap<FolderId, Folder>,
     pub notes: BTreeMap<NoteId, Note>,
     pub trash: Vec<TrashItem>,
+    /// Each folder's `.folder.json`, by folder; a folder without one shows cards.
+    pub views: BTreeMap<FolderId, FolderView>,
 }
 
 /// How a page orders its cards. Folders always come first.
@@ -177,6 +182,14 @@ pub enum Sort {
 impl Library {
     pub fn note(&self, id: &NoteId) -> Option<&Note> {
         self.notes.get(id)
+    }
+
+    pub fn view(&self, folder: &FolderId) -> Option<&FolderView> {
+        self.views.get(folder)
+    }
+
+    pub fn is_table(&self, folder: &FolderId) -> bool {
+        self.view(folder).is_some_and(FolderView::is_table)
     }
 
     pub fn has_folder(&self, id: &FolderId) -> bool {
@@ -285,6 +298,13 @@ impl Library {
                 self.folders.insert(folder.id.clone(), folder);
             }
         }
+        let views: Vec<FolderId> =
+            self.views.keys().filter(|f| !f.is_root() && rebase(&f.0, from, to).is_some()).cloned().collect();
+        for old in views {
+            if let (Some(view), Some(path)) = (self.views.remove(&old), rebase(&old.0, from, to)) {
+                self.views.insert(FolderId(path), view);
+            }
+        }
         let notes: Vec<NoteId> = self.notes.keys().filter(|n| rebase(&n.0, from, to).is_some()).cloned().collect();
         for old in notes {
             if let (Some(mut note), Some(path)) = (self.notes.remove(&old), rebase(&old.0, from, to)) {
@@ -315,6 +335,7 @@ impl Library {
                 let before = self.folders.len() + self.notes.len();
                 self.folders.retain(|f, _| !id.contains(&f.0));
                 self.notes.retain(|n, _| !id.contains(&n.0));
+                self.views.retain(|f, _| f.is_root() || !id.contains(&f.0));
                 let items = before - self.folders.len() - self.notes.len();
                 TrashItem {
                     name,
@@ -349,9 +370,10 @@ impl Library {
     }
 }
 
-/// The title of a note: its first `# ` heading, else its file name.
+/// The title of a note: its first `# ` heading after the properties, else its file name.
 pub fn title_of(text: &str, stem: &str) -> String {
-    text.lines()
+    properties::body(text)
+        .lines()
         .find_map(|line| line.strip_prefix("# ").map(str::trim).filter(|t| !t.is_empty()))
         .unwrap_or(stem)
         .to_owned()
@@ -377,40 +399,49 @@ pub fn file_stem_for(title: &str) -> String {
     if cleaned.is_empty() { "Untitled".to_owned() } else { cleaned }
 }
 
-/// A note split for the editor: the leading `# ` heading when the text starts with one (it is
-/// shown as the page title), and the rest.
+/// A note split for the editor: the properties block (edited apart, never shown as text), the
+/// leading `# ` heading when one comes next (it is shown as the page title), and the rest.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Split<'a> {
+    /// The properties block with the blank lines after it, as written; empty without one.
+    pub front: &'a str,
     pub heading: Option<&'a str>,
     pub body: &'a str,
 }
 
 pub fn split(text: &str) -> Split<'_> {
-    let trimmed = text.trim_start_matches(['\n', '\r']);
+    let block = properties::block_len(text);
+    let after = &text[block..];
+    let trimmed = after.trim_start_matches(['\n', '\r']);
     let (first, rest) = trimmed.split_once('\n').unwrap_or((trimmed, ""));
     match first.trim_end_matches('\r').strip_prefix("# ") {
-        Some(heading) => Split { heading: Some(heading.trim()), body: rest.trim_start_matches(['\n', '\r']) },
-        None => Split { heading: None, body: text },
+        Some(heading) => {
+            let front = if block == 0 { "" } else { &text[..text.len() - trimmed.len()] };
+            Split { front, heading: Some(heading.trim()), body: rest.trim_start_matches(['\n', '\r']) }
+        }
+        None => Split { front: &text[..block], heading: None, body: after },
     }
 }
 
 /// The text with its leading heading set to `title`, adding one when it has none.
 pub fn with_heading(text: &str, title: &str) -> String {
-    compose(Some(title), split(text).body)
+    let parts = split(text);
+    compose(parts.front, Some(title), parts.body)
 }
 
-/// Joins a heading and a body back into a note's text.
-pub fn compose(heading: Option<&str>, body: &str) -> String {
+/// Joins the properties block, a heading and a body back into a note's text.
+pub fn compose(front: &str, heading: Option<&str>, body: &str) -> String {
+    let gap = if front.is_empty() || front.ends_with('\n') { "" } else { "\n" };
     match heading {
-        Some(h) if body.is_empty() => format!("# {h}\n"),
-        Some(h) => format!("# {h}\n\n{body}"),
-        None => body.to_owned(),
+        Some(h) if body.is_empty() => format!("{front}{gap}# {h}\n"),
+        Some(h) => format!("{front}{gap}# {h}\n\n{body}"),
+        None => format!("{front}{gap}{body}"),
     }
 }
 
-/// Words in a note, Markdown markers aside.
+/// Words in a note, Markdown markers and properties aside.
 pub fn word_count(text: &str) -> usize {
-    text.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count()
+    properties::body(text).split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).count()
 }
 
 /// A line of a card's miniature: what kind of block it is and its text without the markers.
@@ -484,11 +515,27 @@ mod tests {
     #[test]
     fn a_leading_heading_splits_off_and_composes_back() {
         let s = split("\n# Trip\n\nDay one");
-        assert_eq!(s, Split { heading: Some("Trip"), body: "Day one" });
-        assert_eq!(split("Just text\n# Later"), Split { heading: None, body: "Just text\n# Later" });
-        assert_eq!(compose(Some("Trip"), "Day one"), "# Trip\n\nDay one");
+        assert_eq!(s, Split { front: "", heading: Some("Trip"), body: "Day one" });
+        assert_eq!(split("Just text\n# Later"), Split { front: "", heading: None, body: "Just text\n# Later" });
+        assert_eq!(compose("", Some("Trip"), "Day one"), "# Trip\n\nDay one");
         assert_eq!(with_heading("plain body", "New"), "# New\n\nplain body");
         assert_eq!(with_heading("# Old\n\nkept", "New"), "# New\n\nkept");
+    }
+
+    #[test]
+    fn the_properties_block_is_kept_apart_from_the_title_and_body() {
+        let text = "---\nstatus: Doing\n---\n\n# Plan\n\nFirst step";
+        let s = split(text);
+        assert_eq!(s, Split { front: "---\nstatus: Doing\n---\n\n", heading: Some("Plan"), body: "First step" });
+        assert_eq!(compose(s.front, s.heading, s.body), text, "composes back byte for byte");
+        assert_eq!(with_heading(text, "Ship"), "---\nstatus: Doing\n---\n\n# Ship\n\nFirst step");
+        let bare = "---\ndue: 2026-01-01\n---\nNo heading";
+        assert_eq!(split(bare), Split { front: "---\ndue: 2026-01-01\n---\n", heading: None, body: "No heading" });
+        assert_eq!(title_of(bare, "file"), "file");
+        assert_eq!(title_of("---\n# not: a title\n---\n# Real", "file"), "Real");
+        assert_eq!(word_count("---\na: one two\n---\nthree"), 1);
+        assert_eq!(preview("---\na: b\n---\n# T\nline", 5), [PreviewLine::Text("line".into())]);
+        assert_eq!(compose("---\na: b\n---", None, "x"), "---\na: b\n---\nx");
     }
 
     #[test]

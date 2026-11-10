@@ -14,6 +14,7 @@ use std::time::SystemTime;
 use jiff::Timestamp;
 
 use super::model::{Folder, FolderId, Library, NOTE_EXT, Note, NoteId, TrashItem, TrashKind, title_of};
+use super::view::{FolderView, VIEW_FILE};
 
 pub const TRASH_DIR: &str = ".trash";
 /// Where trashed items came from, by their name in the trash.
@@ -97,6 +98,9 @@ pub fn scan(root: &Root, cache: &mut ScanCache) -> io::Result<Library> {
     let mut stack = vec![(root.path().to_owned(), FolderId::root())];
     let mut seen = Vec::new();
     while let Some((dir, folder)) = stack.pop() {
+        if let Some(view) = fs::read(dir.join(VIEW_FILE)).ok().and_then(|b| FolderView::parse(&b)) {
+            lib.views.insert(folder.clone(), view);
+        }
         let Ok(entries) = fs::read_dir(&dir) else { continue };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -212,6 +216,15 @@ pub fn save(root: &Root, note: &NoteId, text: &str) -> io::Result<()> {
         return Err(io::Error::new(io::ErrorKind::NotFound, format!("{} is gone", note.0)));
     }
     write_atomic(&path, text.as_bytes())
+}
+
+/// Writes a folder's `.folder.json`.
+pub fn write_view(root: &Root, folder: &FolderId, bytes: &[u8]) -> io::Result<()> {
+    let dir = if folder.is_root() { root.path().to_owned() } else { root.resolve(&folder.0)? };
+    if !dir.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("{} is gone", folder.0)));
+    }
+    write_atomic(&dir.join(VIEW_FILE), bytes)
 }
 
 /// Creates a note file; fails when the name is taken.

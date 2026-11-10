@@ -45,6 +45,11 @@ pub enum Op {
         to: String,
     },
     EmptyTrash,
+    /// Writes a folder's `.folder.json`.
+    WriteView {
+        folder: FolderId,
+        bytes: Vec<u8>,
+    },
     /// Something changed on disk.
     Changed,
     /// Answered with [`Event::Pong`] once every earlier operation is done.
@@ -64,6 +69,7 @@ impl Op {
                 | Op::Trash { .. }
                 | Op::Restore { .. }
                 | Op::EmptyTrash
+                | Op::WriteView { .. }
         )
     }
 }
@@ -205,6 +211,7 @@ impl State {
             }
             Op::Restore { name, to } => disk::restore(&self.root, &name, &to),
             Op::EmptyTrash => disk::empty_trash(&self.root),
+            Op::WriteView { folder, bytes } => disk::write_view(&self.root, &folder, &bytes),
             Op::Changed => {
                 // nd-allow(clock-in-ui): a background thread, not view code
                 self.rescan_at = Some(Instant::now() + WATCH_SETTLE);

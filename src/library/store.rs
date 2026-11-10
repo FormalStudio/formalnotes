@@ -11,6 +11,8 @@ use jiff::Timestamp;
 use nd::prelude::*;
 
 use super::model::{EntryId, Folder, FolderId, Library, Note, NoteId, TrashItem, with_heading};
+use super::properties::{self, Value};
+use super::view::FolderView;
 use super::worker::{self, Event, Op};
 
 #[derive(Clone, Debug)]
@@ -286,6 +288,75 @@ impl Store {
         self.lib().trash.clear();
         self.send(Op::EmptyTrash);
         cx.notify();
+    }
+
+    /// The folder's view as `.folder.json` has it, or the cards view it means by its absence.
+    pub fn view(&self, folder: &FolderId) -> FolderView {
+        self.library.view(folder).cloned().unwrap_or_default()
+    }
+
+    /// Replaces the folder's view and writes its `.folder.json`.
+    pub fn set_view(&mut self, folder: &FolderId, view: FolderView, cx: &mut Context<Self>) {
+        if !self.library.has_folder(folder) || self.library.view(folder) == Some(&view) {
+            return;
+        }
+        let bytes = view.to_json();
+        self.lib().views.insert(folder.clone(), view);
+        self.send(Op::WriteView { folder: folder.clone(), bytes });
+        cx.notify();
+    }
+
+    /// Sets one property of a note; `None` or an empty value removes it. Written at once, not
+    /// held back like typing.
+    pub fn set_property(&mut self, id: &NoteId, name: &str, value: Option<&Value>, cx: &mut Context<Self>) {
+        let Some(note) = self.library.note(id) else { return };
+        let text = match value {
+            Some(value) => properties::set(&note.text, name, value),
+            None => properties::remove(&note.text, name),
+        };
+        self.edit(id, text, cx);
+        self.flush();
+    }
+
+    /// Puts a property's lines back as [`properties::entry`] read them, or removes it.
+    pub fn put_property(&mut self, id: &NoteId, name: &str, lines: Option<&str>, cx: &mut Context<Self>) {
+        let Some(note) = self.library.note(id) else { return };
+        let text = properties::put(&note.text, name, lines);
+        self.edit(id, text, cx);
+        self.flush();
+    }
+
+    /// Renames a column of the folder's view and the property in every note directly in the
+    /// folder. False when the new name is taken or the column is not there.
+    pub fn rename_column(&mut self, folder: &FolderId, from: &str, to: &str, cx: &mut Context<Self>) -> bool {
+        let mut view = self.view(folder);
+        if !view.rename_column(from, to) {
+            return false;
+        }
+        let notes: Vec<(NoteId, String)> = self
+            .library
+            .notes
+            .values()
+            .filter(|n| n.id.folder() == *folder)
+            .map(|n| (n.id.clone(), properties::rename(&n.text, from, to)))
+            .collect();
+        for (id, text) in notes {
+            self.edit(&id, text, cx);
+        }
+        self.flush();
+        self.set_view(folder, view, cx);
+        true
+    }
+
+    /// Adds `option` to a select column's options, when it has a column and lacks the option.
+    pub fn add_option(&mut self, folder: &FolderId, column: &str, option: &str, cx: &mut Context<Self>) {
+        let mut view = self.view(folder);
+        let Some(c) = view.column_mut(column) else { return };
+        if option.is_empty() || c.options.iter().any(|o| o == option) {
+            return;
+        }
+        c.options.push(option.to_owned());
+        self.set_view(folder, view, cx);
     }
 
     /// Blocks until the worker has done everything asked of it and applies what it reported.
