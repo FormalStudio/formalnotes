@@ -1,8 +1,10 @@
 import { fetch } from 'expo/fetch';
 import { Link, router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useColorScheme, View, type ScrollViewInstance } from 'react-native';
+import { useKeyboardHandler, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GlassSurface } from '@/components/glass-surface';
@@ -48,6 +50,8 @@ const COMPOSER = 44;
 const SUBMIT = 34;
 const COMPOSER_GAP = 8;
 const FOOTER_CLEARANCE = COMPOSER + COMPOSER_GAP + 24;
+/** How far above the composer the conversation starts to dissolve into the page. */
+const FADE_OVERHANG = 32;
 
 function Cites({ ids }: { ids: string[] }) {
   const notes = useLibrary((lib) => ids.flatMap((id) => lib.note(id) ?? []));
@@ -231,6 +235,30 @@ export default function Ask() {
     void run(q);
   };
 
+  // The composer rests above the tab bar and only starts to move once the rising keyboard
+  // reaches it, so it rides the keys instead of running ahead of them.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const rest = insets.bottom;
+  const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: -Math.max(0, -keyboard.height.get() - rest) }] }));
+
+  // Room behind the keyboard so the last answer can scroll clear of it. Set once the keyboard
+  // has settled: it sits under the keys, so it has nothing to animate.
+  const [keyboardSpace, setKeyboardSpace] = useState(0);
+  const settled = (height: number) => {
+    setKeyboardSpace(Math.max(0, height - rest));
+    if (height > 0) requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: true }));
+  };
+  useKeyboardHandler(
+    {
+      onEnd: (e) => {
+        'worklet';
+        scheduleOnRN(settled, e.height);
+      },
+    },
+    [rest],
+  );
+
+  const page = useColorScheme() === 'dark' ? '0, 0, 0' : '255, 255, 255';
   const canSend = question.trim() !== '' && !running;
   const empty = turns.length === 0;
 
@@ -262,13 +290,24 @@ export default function Ask() {
         ) : (
           turns.map((t) => <Exchange key={t.id} turn={t} onRetry={() => void run(t.question)} />)
         )}
+        <View style={{ height: keyboardSpace }} />
       </ScrollView>
-      <KeyboardStickyView
+      <Animated.View
         // In a tab the bottom inset already ends at the tab bar, so the composer rests one gap
         // above the bar and, with the keyboard up, one gap above the keys.
-        offset={{ closed: 0, opened: insets.bottom }}
-        style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + COMPOSER_GAP, gap: 8 }}
+        style={[{ position: 'absolute', left: 0, right: 0, bottom: rest, paddingBottom: COMPOSER_GAP, gap: 8 }, lifted]}
       >
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: -FADE_OVERHANG,
+            bottom: 0,
+            experimental_backgroundImage: `linear-gradient(to bottom, rgba(${page}, 0) 0%, rgba(${page}, 0.8) 45%, rgba(${page}, 1) 100%)`,
+          }}
+        />
         {empty && hasKey ? (
           <ScrollView
             horizontal
@@ -339,7 +378,7 @@ export default function Ask() {
             </Pressable>
           </GlassSurface>
         </View>
-      </KeyboardStickyView>
+      </Animated.View>
     </>
   );
 }
