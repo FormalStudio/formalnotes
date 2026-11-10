@@ -85,7 +85,12 @@ export function markdownSpans(body: string, marks = true): ReactNode[] {
       const done = task[2] !== ' ';
       return (
         <Text key={key}>
-          <Text style={{ color: done ? colors.accent : colors.secondary }}>{marks ? task[1] : done ? '✓  ' : '○  '}</Text>
+          {marks ? (
+            // The editor draws a checkbox over the marker, which stays in the text for the caret.
+            <Text style={{ color: 'transparent' }}>{task[1]}</Text>
+          ) : (
+            <Text style={{ color: done ? colors.accent : colors.secondary }}>{done ? '✓  ' : '○  '}</Text>
+          )}
           <Text style={done ? { color: colors.secondary, textDecorationLine: 'line-through' } : undefined}>{task[3]}</Text>
           {end}
         </Text>

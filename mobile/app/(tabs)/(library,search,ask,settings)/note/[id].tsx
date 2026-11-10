@@ -1,19 +1,21 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { AppState, Share, Text, TextInput, View, type TextInputInstance } from 'react-native';
+import { AppState, Keyboard, Share, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { HeaderActions } from '@/components/header-actions';
-import { markdownSpans } from '@/components/note/markdown';
+import { BodyEditor } from '@/components/note/body-editor';
+import { FormatBar, FORMAT_BAR_SPACE } from '@/components/note/format-bar';
 import { addProperty, PropertyStrip } from '@/components/note/property-strip';
 import { trash, type Focus } from '@/lib/app/actions';
 import { useNow } from '@/lib/app/clock';
 import { library, useLibrary } from '@/lib/app/library';
+import { bold, continueList, setKind, toggleTask, type Edit, type Selection } from '@/lib/library/editing';
 import { editorParts, joinParts, nameOf, parentOf, relative } from '@/lib/library/model';
 import { setProperty } from '@/lib/library/properties';
 import type { Note } from '@/lib/library/store';
 import { colors } from '@/lib/ui/colors';
-import { BODY_LINE, BODY_TEXT, EDITOR_TITLE, PAGE_PAD_X } from '@/lib/ui/metrics';
+import { EDITOR_TITLE, PAGE_PAD_X } from '@/lib/ui/metrics';
 
 /** Typing rests this long before a save, and never goes longer than MAX_WAIT unsaved. */
 const REST = 500;
@@ -56,6 +58,10 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
   }
 
   const bodyRef = useRef<TextInputInstance>(null);
+  const caret = useRef<Selection>({ start: 0, end: 0 });
+  const settling = useRef(false);
+  const replaced = useRef<string | null>(null);
+  const [typing, setTyping] = useState(false);
   const pending = useRef<string | null>(null);
   const rest = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cap = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,6 +118,29 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
   const onBody = (b: string) => {
     setBody(b);
     queue(joinParts(props, heading ? title : null, b));
+  };
+
+  /** Puts an edit of ours in the field, with the caret where the edit left it. */
+  const apply = ({ text, selection }: Edit) => {
+    onBody(text);
+    caret.current = selection;
+    // The field still reports the caret from before the edit; that report is dropped.
+    settling.current = true;
+    requestAnimationFrame(() => {
+      bodyRef.current?.setSelection(selection.start, selection.end);
+      settling.current = false;
+    });
+  };
+
+  const onTyped = (b: string) => {
+    // The field can report one keystroke twice; the second report would undo the edit made for the first.
+    if (settling.current && b === replaced.current) return;
+    const { start, end } = caret.current;
+    const carried = start === end ? continueList(body, b, start) : null;
+    if (carried) {
+      replaced.current = b;
+      apply(carried);
+    } else onBody(b);
   };
 
   const onProperty = (name: string, formatted: string) => {
@@ -175,7 +204,8 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
       <KeyboardAwareScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="interactive"
-        bottomOffset={24}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={24 + FORMAT_BAR_SPACE}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 4, paddingBottom: 120, gap: 16 }}
       >
@@ -198,21 +228,26 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
           <Text style={{ fontSize: 13, color: colors.secondary }}>{caption}</Text>
         </View>
         <PropertyStrip props={props} columns={columns} onSet={onProperty} />
-        <TextInput
+        <BodyEditor
           ref={bodyRef}
-          accessibilityLabel="Body"
-          onChangeText={onBody}
-          placeholder="Start writing"
-          placeholderTextColor={colors.tertiary}
+          body={body}
           autoFocus={focus === 'body'}
-          multiline
-          scrollEnabled={false}
-          textAlignVertical="top"
-          style={{ fontSize: BODY_TEXT, lineHeight: BODY_LINE, color: colors.text, padding: 0, minHeight: 240 }}
-        >
-          {markdownSpans(body)}
-        </TextInput>
+          onChangeText={onTyped}
+          onSelection={(selection) => {
+            if (!settling.current) caret.current = selection;
+          }}
+          onToggle={(line) => onBody(toggleTask(body, line))}
+          onFocus={() => setTyping(true)}
+          onBlur={() => setTyping(false)}
+        />
       </KeyboardAwareScrollView>
+      {typing ? (
+        <FormatBar
+          onKind={(kind) => apply(setKind(body, caret.current, kind))}
+          onBold={() => apply(bold(body, caret.current))}
+          onDone={Keyboard.dismiss}
+        />
+      ) : null}
     </>
   );
 }
