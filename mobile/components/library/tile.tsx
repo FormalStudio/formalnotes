@@ -1,6 +1,6 @@
 import { Link, router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Alert, Pressable } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { destinations, moveTo, newNote, rename, trash } from '@/lib/app/actions';
@@ -44,37 +44,41 @@ export function Tile({ id, kind, path, href, label, onPressed, children }: Props
     ]);
   };
 
+  // The link's menu mounts a second native view beside the trigger. One wrapper keeps the pair a
+  // single child of the grid row, so the row's gap is applied once.
   return (
-    <Link href={href} asChild>
-      <Link.Trigger>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          onPressIn={() => press(true)}
-          onPressOut={() => press(false)}
-          onPress={() => haptic('selection')}
-          onLongPress={process.env.EXPO_OS === 'android' ? androidMenu : undefined}
-        >
-          <Animated.View style={style}>{children}</Animated.View>
-        </Pressable>
-      </Link.Trigger>
-      <Link.Menu>
-        {kind === 'folder' ? (
-          <Link.MenuAction title="New note here" icon="square.and.pencil" onPress={() => newNote(path)} />
-        ) : null}
-        <Link.MenuAction title="Rename" icon="pencil" onPress={() => void rename(id)} />
-        <Link.Menu title="Move to" icon="folder">
-          {destinations(id).map((d) => (
-            <Link.MenuAction
-              key={d.path}
-              title={d.name}
-              icon={d.path === '' ? 'house' : 'folder'}
-              onPress={() => moveTo(id, d.path)}
-            />
-          ))}
+    <View>
+      <Link href={href} asChild>
+        <Link.Trigger>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            onPressIn={() => press(true)}
+            onPressOut={() => press(false)}
+            onPress={() => haptic('selection')}
+            onLongPress={process.env.EXPO_OS === 'android' ? androidMenu : undefined}
+          >
+            <Animated.View style={style}>{children}</Animated.View>
+          </Pressable>
+        </Link.Trigger>
+        <Link.Menu>
+          {kind === 'folder' ? (
+            <Link.MenuAction title="New note here" icon="square.and.pencil" onPress={() => newNote(path)} />
+          ) : null}
+          <Link.MenuAction title="Rename" icon="pencil" onPress={() => void rename(id)} />
+          <Link.Menu title="Move to" icon="folder">
+            {destinations(id).map((d) => (
+              <Link.MenuAction
+                key={d.path}
+                title={d.name}
+                icon={d.path === '' ? 'house' : 'folder'}
+                onPress={() => moveTo(id, d.path)}
+              />
+            ))}
+          </Link.Menu>
+          <Link.MenuAction title="Delete" icon="trash" destructive onPress={() => trash(id)} />
         </Link.Menu>
-        <Link.MenuAction title="Delete" icon="trash" destructive onPress={() => trash(id)} />
-      </Link.Menu>
-    </Link>
+      </Link>
+    </View>
   );
 }

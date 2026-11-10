@@ -1,5 +1,5 @@
-import { Text } from 'react-native';
+import { FolderScreen } from '@/components/library/folder-screen';
 
 export default function Home() {
-  return <Text style={{ marginTop: 200 }}>probe</Text>;
+  return <FolderScreen folder="" title="Notes" />;
 }
