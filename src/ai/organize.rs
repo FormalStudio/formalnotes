@@ -64,7 +64,8 @@ fits, and name it the way the existing folders are named. Use \"\" for the top l
 - Keep every fact, name, number, date, link and task from the dump, and keep the author's own \
 wording. Fix only obvious typos. Do not add facts, advice or commentary.
 - Give each note a short title in the author's voice. The body is Markdown without the title \
-heading: tasks stay \"- [ ]\" items, lists stay lists.
+heading: tasks stay \"- [ ]\" items, lists stay lists. Do not reuse the title of a note that \
+already exists.
 - Fill a folder's columns as properties when the dump says the value. Leave out what it does \
 not say.
 - Never file into the inbox folder the dump came from.";

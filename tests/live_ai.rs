@@ -27,7 +27,10 @@ fn live() {
     let app = launch_app(
         LaunchOptions::new(env!("CARGO_BIN_EXE_formalnotes"))
             .env("FORMALNOTES_DEMO", "1")
-            .env("FORMALNOTES_LIVE_KEY_FILE", format!("{}/.claude/secrets/canaryllm-api-key", std::env::var("HOME").unwrap()))
+            .env(
+                "FORMALNOTES_LIVE_KEY_FILE",
+                format!("{}/.claude/secrets/canaryllm-api-key", std::env::var("HOME").unwrap()),
+            )
             .env("ND_APP_CONFIG_DIR", config.path().to_string_lossy()),
     )
     .expect("launch");
@@ -54,14 +57,11 @@ fn live() {
     let field = app.get_by_test_id("ask-field");
     field.fill("How long does the focaccia bake, and at what temperature?").unwrap();
     field.press("enter").unwrap();
-    std::thread::sleep(Duration::from_secs(2));
+    expect(&app.get_by_test_id("ask-stop")).to_be_visible().unwrap();
     let done = app.get_by_test_id("ask-stop").with_timeout(Duration::from_secs(120)).wait_for(WaitState::Detached);
     eprintln!("ask done: {done:?}\n{}", app.stderr_tail(60).join("\n"));
     std::thread::sleep(Duration::from_millis(800));
-    let id = std::process::Command::new("/tmp/fn-live/winid").arg(app.pid().to_string()).output().unwrap();
-    let id = String::from_utf8_lossy(&id.stdout).trim().to_owned();
-    let shot = out.join(format!("ask-{provider}-{theme}.png"));
-    std::process::Command::new("screencapture").args(["-x", "-o", "-l", &id]).arg(&shot).status().unwrap();
+    app.screenshot(&out.join(format!("ask-{provider}-{theme}.png")), None).unwrap();
     std::fs::write(out.join(format!("ask-{provider}-{theme}.txt")), app.snapshot().unwrap()).unwrap();
 
     let deadline = std::time::Instant::now() + Duration::from_secs(240);
@@ -75,7 +75,11 @@ fn live() {
     std::fs::write(out.join(format!("organized-{provider}-{theme}.txt")), app.snapshot().unwrap()).unwrap();
     let mut files = Vec::new();
     for e in walk(&root) {
-        files.push(format!("== {}\n{}", e.strip_prefix(&root).unwrap().display(), std::fs::read_to_string(&e).unwrap_or_default()));
+        files.push(format!(
+            "== {}\n{}",
+            e.strip_prefix(&root).unwrap().display(),
+            std::fs::read_to_string(&e).unwrap_or_default()
+        ));
     }
     std::fs::write(out.join(format!("tree-{provider}-{theme}.txt")), files.join("\n")).unwrap();
     assert!(!dump.exists(), "the dump was not organized");
