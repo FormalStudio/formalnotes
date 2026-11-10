@@ -19,7 +19,8 @@
           "UIInterfaceOrientationLandscapeLeft",
           "UIInterfaceOrientationLandscapeRight"
         ]
-      }
+      },
+      "appleTeamId": "8E7JB82GJK"
     },
     "android": {
       "package": "dev.formalsnake.formalnotes",
