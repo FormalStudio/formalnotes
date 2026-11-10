@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { isLiquidGlass } from '@/lib/liquid-glass';
+import { colors } from '@/lib/ui/colors';
 
 export const unstable_settings = {
   library: { anchor: 'index' },
@@ -29,6 +30,8 @@ export default function SharedLayout({ segment }: { segment: string }) {
         // Below iOS 26 there is no scroll edge effect, so the transparent header needs a material.
         headerBlurEffect: isLiquidGlass() ? 'none' : 'systemChromeMaterial',
         headerBackButtonDisplayMode: 'minimal',
+        // The desktop's white page: the cards' rings and the folders' plates are drawn against it.
+        contentStyle: { backgroundColor: colors.page },
       }}
     >
       <Stack.Screen name={root.name} options={{ title: root.title }} />

@@ -7,8 +7,10 @@ export const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 export const DESIGN_CARD_WIDTH = 236;
 export const CARD_ASPECT = 264 / 236;
+/** Between cards, across and down. */
 export const CARD_GAP = 16;
-export const CARD_GAP_FOLDERS = 24;
+/** Between the folders and the notes under them. */
+export const SECTION_GAP = 24;
 export const CARD_FRAME = 5;
 export const CARD_RADIUS = 20;
 export const CARD_PADDING = 16;

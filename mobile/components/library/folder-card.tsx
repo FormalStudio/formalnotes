@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from 'react-native-reanimated';
 
@@ -44,6 +45,8 @@ type Props = {
   width: number;
   height: number;
   motion: FolderMotion;
+  /** The card is where the folder's page grows out of when it opens. */
+  zoom: boolean;
 };
 
 function Paper({ index, width, height, k, firstPage, lift }: { index: number; width: number; height: number; k: number; firstPage: string | null; lift: SharedValue<number> }) {
@@ -88,13 +91,14 @@ function Paper({ index, width, height, k, firstPage, lift }: { index: number; wi
 }
 
 /** A folder as stacked papers behind a Liquid Glass front panel, the desktop's folder card. */
-export function FolderCard({ name, items, firstPage, width, height, motion }: Props) {
+export function FolderCard({ name, items, firstPage, width, height, motion, zoom }: Props) {
   const k = cardScale(width);
   const papers = Math.min(Math.max(items, 1), 3);
   const front = useAnimatedStyle(() => ({ transform: [{ translateY: 2 * motion.front.get() }] }));
   const plateTop = FOLDER_TAB_RISE * height;
-  return (
-    <View style={{ width, height }}>
+  // Not collapsable: the zoom source takes one native child, and a flattened card would hand it the tab alone.
+  const card = (
+    <View collapsable={false} style={{ width, height }}>
       <View
         style={{
           position: 'absolute',
@@ -141,4 +145,5 @@ export function FolderCard({ name, items, firstPage, width, height, motion }: Pr
       </View>
     </View>
   );
+  return zoom ? <Link.AppleZoom>{card}</Link.AppleZoom> : card;
 }

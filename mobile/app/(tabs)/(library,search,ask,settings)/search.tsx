@@ -7,6 +7,7 @@ import { NoteRow, RowSeparator } from '@/components/note-row';
 import { capture } from '@/lib/app/actions';
 import { useLibrary } from '@/lib/app/library';
 import { colors } from '@/lib/ui/colors';
+import { PAGE_PAD_X } from '@/lib/ui/metrics';
 
 export default function Search() {
   const [query, setQuery] = useState('');
@@ -34,7 +35,7 @@ export default function Search() {
         keyboardShouldPersistTaps="handled"
         ItemSeparatorComponent={RowSeparator}
         ListHeaderComponent={
-          <Text style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, fontSize: 15, fontWeight: '600', color: colors.secondary }}>
+          <Text style={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 8, paddingBottom: 4, fontSize: 15, fontWeight: '600', color: colors.secondary }}>
             {searching ? (notes.length === 1 ? '1 note' : `${notes.length} notes`) : 'Recently edited'}
           </Text>
         }

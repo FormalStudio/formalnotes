@@ -5,7 +5,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { HeaderActions } from '@/components/header-actions';
 import { markdownSpans } from '@/components/note/markdown';
-import { PropertyStrip } from '@/components/note/property-strip';
+import { addProperty, PropertyStrip } from '@/components/note/property-strip';
 import { trash, type Focus } from '@/lib/app/actions';
 import { useNow } from '@/lib/app/clock';
 import { library, useLibrary } from '@/lib/app/library';
@@ -13,7 +13,7 @@ import { editorParts, joinParts, nameOf, parentOf, relative } from '@/lib/librar
 import { setProperty } from '@/lib/library/properties';
 import type { Note } from '@/lib/library/store';
 import { colors } from '@/lib/ui/colors';
-import { BODY_LINE, BODY_TEXT, EDITOR_TITLE } from '@/lib/ui/metrics';
+import { BODY_LINE, BODY_TEXT, EDITOR_TITLE, PAGE_PAD_X } from '@/lib/ui/metrics';
 
 /** Typing rests this long before a save, and never goes longer than MAX_WAIT unsaved. */
 const REST = 500;
@@ -135,6 +135,7 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
             label: 'More',
             groups: [
               [
+                { title: 'Add property', sf: 'plus', md: 'add', onPress: () => void addProperty(onProperty) },
                 {
                   title: 'Move to',
                   sf: 'folder',
@@ -175,7 +176,8 @@ function Editor({ note, focus }: { note: Note; focus?: Focus }) {
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="interactive"
         bottomOffset={24}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 120, gap: 14 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 4, paddingBottom: 120, gap: 16 }}
       >
         <View style={{ gap: 4 }}>
           <TextInput

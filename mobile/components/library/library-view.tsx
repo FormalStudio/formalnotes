@@ -9,18 +9,19 @@ import { sync, useSync } from '@/lib/app/sync';
 import { relative } from '@/lib/library/model';
 import type { Folder, Note } from '@/lib/library/store';
 import { colors } from '@/lib/ui/colors';
-import { CARD_ASPECT, CARD_GAP, CARD_GAP_FOLDERS, cardColumns, PAGE_PAD_X } from '@/lib/ui/metrics';
+import { CARD_ASPECT, CARD_FOOTER, CARD_GAP, cardColumns, PAGE_PAD_X, SECTION_GAP } from '@/lib/ui/metrics';
 import { LAYOUT } from '@/lib/ui/motion';
 import { FolderCard, useFolderMotion } from './folder-card';
 import { NoteCard } from './note-card';
 import { TableView } from './table-view';
 import { Tile } from './tile';
 
-type Item = { kind: 'folder'; folder: Folder; items: number; firstPage: string | null } | { kind: 'note'; note: Note };
+type FolderItem = { folder: Folder; items: number; firstPage: string | null };
 
 const GLIDE = LinearTransition.springify().stiffness(LAYOUT.stiffness ?? 420).damping(LAYOUT.damping ?? 31);
+const ZOOM = process.env.EXPO_OS === 'ios';
 
-function FolderTile({ item, width, height }: { item: Extract<Item, { kind: 'folder' }>; width: number; height: number }) {
+function FolderTile({ item, width, height }: { item: FolderItem; width: number; height: number }) {
   const motion = useFolderMotion();
   const { folder } = item;
   return (
@@ -32,12 +33,12 @@ function FolderTile({ item, width, height }: { item: Extract<Item, { kind: 'fold
       label={`${folder.name}, folder, ${item.items === 1 ? '1 item' : `${item.items} items`}`}
       onPressed={motion.open}
     >
-      <FolderCard name={folder.name} items={item.items} firstPage={item.firstPage} width={width} height={height} motion={motion} />
+      <FolderCard name={folder.name} items={item.items} firstPage={item.firstPage} width={width} height={height} motion={motion} zoom={ZOOM} />
     </Tile>
   );
 }
 
-function NoteTile({ note, width, height, besideFolders, now }: { note: Note; width: number; height: number; besideFolders: boolean; now: number }) {
+function NoteTile({ note, width, height, now }: { note: Note; width: number; height: number; now: number }) {
   const caption = relative(note.modified, now);
   return (
     <Tile
@@ -47,15 +48,7 @@ function NoteTile({ note, width, height, besideFolders, now }: { note: Note; wid
       href={{ pathname: '/note/[id]', params: { id: note.id } }}
       label={`${note.title}, edited ${caption}`}
     >
-      <NoteCard
-        title={note.title}
-        text={note.text}
-        caption={caption}
-        width={width}
-        height={height}
-        besideFolders={besideFolders}
-        zoom={process.env.EXPO_OS === 'ios'}
-      />
+      <NoteCard title={note.title} text={note.text} caption={caption} width={width} height={height} zoom={ZOOM} />
     </Tile>
   );
 }
@@ -72,22 +65,17 @@ function Empty({ home }: { home: boolean }) {
   );
 }
 
-/** A folder's contents: its folders, then its notes, as the desktop's cards, or as a table. */
+/** A folder's contents as the desktop's cards, folders in their own rows above the notes, or as a table. */
 export function LibraryView({ folder }: { folder: string }) {
   const { width } = useWindowDimensions();
   const { email } = useSync();
   const [refreshing, setRefreshing] = useState(false);
   const now = useNow();
   const view = useLibrary((lib) => lib.folderView(folder));
-  const items = useLibrary((lib): Item[] => [
-    ...lib.subfolders(folder, 'title').map((f) => ({
-      kind: 'folder' as const,
-      folder: f,
-      items: lib.count(f.path),
-      firstPage: lib.notesIn(f.path)[0]?.text ?? null,
-    })),
-    ...lib.notesIn(folder).map((n) => ({ kind: 'note' as const, note: n })),
-  ]);
+  const folders = useLibrary((lib): FolderItem[] =>
+    lib.subfolders(folder, 'title').map((f) => ({ folder: f, items: lib.count(f.path), firstPage: lib.notesIn(f.path)[0]?.text ?? null })),
+  );
+  const notes = useLibrary((lib) => lib.notesIn(folder));
 
   const refresh = email
     ? () => {
@@ -99,32 +87,36 @@ export function LibraryView({ folder }: { folder: string }) {
 
   if (view.view === 'table') return <TableView folder={folder} view={view} refreshControl={refreshControl} />;
 
-  const hasFolders = items.some((i) => i.kind === 'folder');
-  const gap = hasFolders ? CARD_GAP_FOLDERS : CARD_GAP;
   const avail = width - PAGE_PAD_X * 2;
   const columns = cardColumns(avail, CARD_GAP);
-  const cardWidth = (avail - gap * (columns - 1)) / columns;
+  const cardWidth = (avail - CARD_GAP * (columns - 1)) / columns;
   const cardHeight = cardWidth * CARD_ASPECT;
 
   return (
     <Animated.FlatList
       key={columns}
-      data={items}
+      data={notes}
       numColumns={columns}
-      keyExtractor={(i) => (i.kind === 'folder' ? i.folder.id : i.note.id)}
+      keyExtractor={(n) => n.id}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 8, paddingBottom: 32, gap }}
-      columnWrapperStyle={columns > 1 ? { gap } : undefined}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: CARD_GAP / 2, paddingBottom: SECTION_GAP, gap: CARD_GAP }}
+      columnWrapperStyle={columns > 1 ? { gap: CARD_GAP } : undefined}
       itemLayoutAnimation={GLIDE}
       refreshControl={refreshControl}
-      ListEmptyComponent={<Empty home={folder === ''} />}
-      renderItem={({ item }) =>
-        item.kind === 'folder' ? (
-          <FolderTile item={item} width={cardWidth} height={cardHeight} />
-        ) : (
-          <NoteTile note={item.note} width={cardWidth} height={cardHeight} besideFolders={hasFolders} now={now} />
-        )
+      ListHeaderComponent={
+        folders.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, paddingBottom: notes.length > 0 ? SECTION_GAP - CARD_GAP : 0 }}>
+            {folders.map((item) => (
+              <Animated.View key={item.folder.id} layout={GLIDE}>
+                <FolderTile item={item} width={cardWidth} height={cardHeight} />
+              </Animated.View>
+            ))}
+          </View>
+        ) : undefined
       }
+      ListEmptyComponent={folders.length === 0 ? <Empty home={folder === ''} /> : undefined}
+      renderItem={({ item }) => <NoteTile note={item} width={cardWidth} height={cardHeight + CARD_FOOTER} now={now} />}
     />
   );
 }

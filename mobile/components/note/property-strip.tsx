@@ -48,7 +48,17 @@ type Props = {
   onSet: (name: string, formatted: string) => void;
 };
 
-/** The note's properties above its body, each edited by its type, and a way to add one. */
+/** Asks for a name and a value, and sets the property typed by what the value reads as. */
+export async function addProperty(onSet: Props['onSet']): Promise<void> {
+  const name = await askName({ title: 'New property', initial: '', confirm: 'Next' });
+  if (!name) return;
+  const v = await askName({ title: name, initial: '', confirm: 'Add' });
+  if (!v) return;
+  const value = parseValue(v);
+  onSet(name, formatValue(inferType(value), value));
+}
+
+/** The note's properties above its body, each edited by its type. Nothing when it has none. */
 export function PropertyStrip({ props, columns, onSet }: Props) {
   const list = rows(props, columns);
 
@@ -70,15 +80,7 @@ export function PropertyStrip({ props, columns, onSet }: Props) {
     onSet(row.name, formatValue(row.type, row.type === 'number' && Number.isNaN(value) ? v : value));
   };
 
-  const add = async () => {
-    const name = await askName({ title: 'New property', initial: '', confirm: 'Next' });
-    if (!name) return;
-    const v = await askName({ title: name, initial: '', confirm: 'Add' });
-    if (!v) return;
-    const value = parseValue(v);
-    onSet(name, formatValue(inferType(value), value));
-  };
-
+  if (list.length === 0) return null;
   return (
     <View style={{ gap: 2 }}>
       {list.map((row) => (
@@ -116,15 +118,6 @@ export function PropertyStrip({ props, columns, onSet }: Props) {
           )}
         </Pressable>
       ))}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => void add()}
-        hitSlop={6}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, opacity: pressed ? 0.5 : 1 })}
-      >
-        <Icon sf="plus" md="add" size={14} color={colors.tertiary} />
-        <Text style={{ fontSize: 15, color: colors.tertiary }}>Add property</Text>
-      </Pressable>
     </View>
   );
 }

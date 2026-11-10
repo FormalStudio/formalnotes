@@ -5,6 +5,7 @@ import { Icon } from '@/components/icon';
 import { destinations, moveTo } from '@/lib/app/actions';
 import { useLibrary } from '@/lib/app/library';
 import { colors } from '@/lib/ui/colors';
+import { PAGE_PAD_X } from '@/lib/ui/metrics';
 
 /** Where a note or folder can go, for Android's long press and the note's menu. */
 export default function Move() {
@@ -29,7 +30,7 @@ export default function Move() {
             alignItems: 'center',
             gap: 12,
             minHeight: 48,
-            paddingHorizontal: 20,
+            paddingHorizontal: PAGE_PAD_X,
             backgroundColor: pressed ? colors.fill : 'transparent',
           })}
         >

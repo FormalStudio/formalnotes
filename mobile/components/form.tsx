@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View, type TextInputInst
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { colors } from '@/lib/ui/colors';
+import { PAGE_PAD_X } from '@/lib/ui/metrics';
 
 /** A sheet's body: a scrolling column that keeps the focused field above the keyboard. */
 export function Form({ children }: { children: ReactNode }) {
@@ -11,7 +12,8 @@ export function Form({ children }: { children: ReactNode }) {
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       bottomOffset={24}
-      contentContainerStyle={{ padding: 20, gap: 16 }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ padding: PAGE_PAD_X, gap: 16 }}
     >
       {children}
     </KeyboardAwareScrollView>

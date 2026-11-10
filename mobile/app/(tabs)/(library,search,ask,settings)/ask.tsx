@@ -171,6 +171,7 @@ export default function Ask() {
         }
       />
       <ScrollView
+        showsVerticalScrollIndicator={false}
         ref={scroll}
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="interactive"
