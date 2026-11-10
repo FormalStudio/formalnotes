@@ -38,6 +38,9 @@ harness = false
 # Key derivation runs SHA-256 1.2 million times; debug builds and tests optimise the hash.
 [profile.dev.package]
 sha2.opt-level = 3
+pbkdf2.opt-level = 3
+hmac.opt-level = 3
+digest.opt-level = 3
 
 [lints.clippy]
 unwrap_used = "deny"

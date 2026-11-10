@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use nd::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::ai::{AssistantSettings, BrainDumpSettings};
 use crate::library::Sort;
 
 #[derive(Settings, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -19,6 +20,11 @@ pub struct NotesSettings {
     pub theme: ThemeChoice,
     /// How Home and folder pages order their cards.
     pub sort: SortOrder,
+    /// The model Ask and the automations use. The API key is kept in the keychain.
+    #[settings(section)]
+    pub assistant: AssistantSettings,
+    #[settings(section)]
+    pub brain_dumps: BrainDumpSettings,
 }
 
 impl Default for NotesSettings {
@@ -28,6 +34,8 @@ impl Default for NotesSettings {
             editor_width: EditorWidth::Standard,
             theme: ThemeChoice::System,
             sort: SortOrder::Modified,
+            assistant: AssistantSettings::default(),
+            brain_dumps: BrainDumpSettings::default(),
         }
     }
 }
@@ -144,6 +152,7 @@ pub const ACCOUNT_TAB: &str = "account";
 pub struct SettingsWindow {
     tab: SharedString,
     account: Entity<crate::views::account::AccountPane>,
+    api_key: Entity<crate::views::api_key::ApiKey>,
 }
 
 impl SettingsWindow {
@@ -164,7 +173,11 @@ impl Render for SettingsWindow {
         let body = if self.tab.as_ref() == ACCOUNT_TAB {
             div().size_full().p(theme.spacing.lg).child(self.account.clone())
         } else {
-            div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
+            v_flex()
+                .size_full()
+                .p(theme.spacing.lg)
+                .child(div().flex_1().min_h_0().child(settings_form::<NotesSettings>()))
+                .child(self.api_key.clone())
         };
         div().size_full().child(tabs).child(body)
     }
@@ -183,7 +196,8 @@ pub fn open_tab(cx: &mut App, tab: &str) -> Option<WindowHandle<SettingsWindow>>
     let tab = SharedString::from(tab.to_owned());
     let handle = open_settings(cx, move |window, cx| {
         let account = cx.new(|cx| crate::views::account::AccountPane::new(window, cx));
-        cx.new(|_| SettingsWindow { tab, account })
+        let api_key = cx.new(|cx| crate::views::api_key::ApiKey::new(window, cx));
+        cx.new(|_| SettingsWindow { tab, account, api_key })
     })?;
     cx.set_global(OpenWindow(handle.root().downgrade()));
     Some(handle)

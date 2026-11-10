@@ -11,6 +11,8 @@ use nd::core::{NodeId, Point, WindowId};
 use nd::prelude::*;
 use nd::test::{DragPreview, SPRING_LOAD_DELAY, Size, TestApp, by_test_id, text};
 
+mod support;
+
 const WINDOW: Size = Size { width: 1280., height: 800. };
 
 /// Runs frames on a ticking clock until nothing moves: cards fade up and notes grow from their
@@ -654,4 +656,64 @@ fn a_card_dropped_on_the_trash_row_goes_to_the_trash_with_undo() {
     assert_eq!(rig.view().store().read(&rig.cx).library().trash.len(), 1);
     rig.undo_last();
     assert!(rig.has_note("Ideas.md"), "undo puts it back");
+}
+
+fn ask(rig: &mut Rig, question: &str) {
+    let id = rig.id();
+    let field = by_test_id(&mut rig.cx, id, formalnotes::views::ask::FIELD).expect("the question field").id;
+    rig.emit(field, nd::components::TextChanged { text: question.to_owned().into() });
+    rig.emit(field, nd::components::TextSubmitted { text: question.to_owned().into() });
+    let pane = rig.view().ask().clone();
+    pane.update(&mut rig.cx, |a, cx| a.settle(cx));
+    idle(&mut rig.cx);
+}
+
+#[nd::test]
+fn ask_answers_from_the_notes_and_its_sources_open_them() {
+    use formalnotes::ai::chat::Block;
+    use support::{Fake, Script, answer, call};
+
+    let mut rig = open();
+    let script = Script::new([
+        call("c1", "search_notes", serde_json::json!({ "query": "beta ship" })),
+        answer("The beta ships on the **14th** [[Projects/Meeting notes.md]]."),
+        answer("Ana, Joris and Mei [[Projects/Meeting notes.md]]."),
+    ]);
+    rig.cx.set_global(formalnotes::ai::Connector(std::sync::Arc::new(Fake(script.clone()))));
+    rig.act(&formalnotes::actions::AskNotes);
+    assert!(rig.view().ask_open(), "the shortcut opens the pane");
+    assert!(rig.all_text().contains("Ask anything your notes know"));
+
+    ask(&mut rig, "When does the beta ship?");
+    let shown = rig.all_text();
+    assert!(shown.contains("The beta ships on the 14th"), "{shown}");
+    assert!(!shown.contains("[[") && !shown.contains("**"), "citations and markup are drawn, not shown: {shown}");
+    assert!(shown.contains("Meeting notes") && shown.contains("Projects"), "the source row: {shown}");
+
+    rig.tap("source-1-0");
+    assert_eq!(rig.view().open_note(), Some(&NoteId("Projects/Meeting notes.md".into())), "a source opens its note");
+    assert!(rig.view().ask_open(), "the conversation stays beside the note");
+
+    ask(&mut rig, "Who was there?");
+    let seen = script.seen();
+    let follow_up = &seen[2].messages;
+    assert_eq!(follow_up[0].text(), "When does the beta ship?", "a follow-up carries the conversation");
+    assert!(follow_up.iter().any(|m| m.content.iter().any(|b| matches!(b, Block::ToolResult { .. }))));
+    assert_eq!(follow_up.last().map(|m| m.text()).as_deref(), Some("Who was there?"));
+    assert!(rig.all_text().contains("Ana, Joris and Mei"));
+}
+
+#[nd::test]
+fn ask_without_a_key_says_so_and_offers_settings() {
+    use formalnotes::ai::chat::{AiError, Provider};
+
+    let mut rig = open();
+    let failing = support::Failing(AiError::NoKey(Provider::Anthropic));
+    rig.cx.set_global(formalnotes::ai::Connector(std::sync::Arc::new(failing)));
+    rig.act(&formalnotes::actions::AskNotes);
+    ask(&mut rig, "What did I plan for the weekend?");
+    let shown = rig.all_text();
+    assert!(shown.contains("Add your Anthropic API key in Settings to use AI."), "{shown}");
+    let id = rig.id();
+    assert!(by_test_id(&mut rig.cx, id, "ask-settings-1").is_some(), "a button to open Settings");
 }
