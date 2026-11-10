@@ -1,5 +1,8 @@
 //! The window and everything drawn in it.
 
+mod ai;
+pub mod api_key;
+pub mod ask;
 mod cards;
 pub mod editor;
 mod format;

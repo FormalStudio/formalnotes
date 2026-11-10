@@ -20,6 +20,8 @@ actions!(
         MoveToTrash,
         OpenSettings,
         ReportIssue,
+        AskNotes,
+        OrganizeNote,
     ]
 );
 
@@ -61,6 +63,7 @@ pub fn shortcut(action: &dyn Action) -> Option<&'static str> {
         "formalnotes::GoHome" => label("⌘1", "Ctrl+1"),
         "formalnotes::MoveToTrash" => label("⌘⌫", "Ctrl+Backspace"),
         "formalnotes::OpenSettings" => label("⌘,", "Ctrl+,"),
+        "formalnotes::AskNotes" => label("⇧⌘A", "Shift+Ctrl+A"),
         "nd::ToggleSidebar" => label("⌘\\", "Ctrl+\\"),
         _ => None,
     }
@@ -88,6 +91,7 @@ pub fn init(cx: &mut App) {
         // In the editor Command-F is Edit > Find, the find bar over the note, as in Notes.
         KeyBinding::new("secondary-f", Search, Some("FormalNotes && !NoteEditor")),
         KeyBinding::new("secondary-1", GoHome, Some(CONTEXT)),
+        KeyBinding::new("secondary-shift-a", AskNotes, Some(CONTEXT)),
         KeyBinding::new("secondary-[", GoBack, Some(CONTEXT)),
         // Not while typing: there Command-Delete deletes to the start of the line.
         KeyBinding::new("secondary-backspace", MoveToTrash, Some("FormalNotes && !NoteEditor")),
@@ -105,6 +109,7 @@ pub fn init(cx: &mut App) {
             Menu::new("File").items([
                 MenuItem::action("New Note", NewNote),
                 MenuItem::action("New Folder", NewFolder),
+                MenuItem::action("Organize Note", OrganizeNote),
                 MenuItem::separator(),
                 MenuItem::action("Empty Trash", EmptyTrash),
             ]),
@@ -113,6 +118,7 @@ pub fn init(cx: &mut App) {
                 MenuItem::action("Back", GoBack),
                 MenuItem::action("Search Notes", Search),
                 MenuItem::action("Command Palette", OpenPalette),
+                MenuItem::action("Ask Your Notes", AskNotes),
                 MenuItem::action("Trash", OpenTrash),
                 MenuItem::separator(),
                 MenuItem::role(MenuRole::ToggleSidebar),

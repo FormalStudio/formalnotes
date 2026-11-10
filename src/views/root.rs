@@ -42,12 +42,16 @@ pub struct FormalNotes {
     pub(super) sidebar_width: f32,
     palette: Option<Mode>,
     palette_query: SharedString,
-    notices: Notices,
+    pub(super) notices: Notices,
     rename: Option<(EntryId, Entity<TextFieldState>)>,
     seen_failures: usize,
     /// A demo library ignores the library setting.
     fixed_root: bool,
     theme: Option<ThemeChoice>,
+    pub(super) ask: Entity<super::ask::Ask>,
+    pub(super) ask_open: bool,
+    pub(super) ask_width: f32,
+    pub(super) automations: Entity<crate::ai::Automations>,
 }
 
 impl FormalNotes {
@@ -71,6 +75,7 @@ impl FormalNotes {
             )
         });
         cx.observe(&store, |this, store, cx| this.store_changed(store, cx)).detach();
+        let (ask, automations) = Self::ai_parts(&store, cx);
         Self {
             store,
             editor,
@@ -91,6 +96,10 @@ impl FormalNotes {
             seen_failures: 0,
             fixed_root,
             theme: None,
+            ask,
+            ask_open: false,
+            ask_width: super::ai::ASK_WIDTH,
+            automations,
         }
     }
 
@@ -434,6 +443,8 @@ impl FormalNotes {
             }
             Command::ToggleSidebar => cx.window_command(window.id(), nd::backend::WindowCommand::ToggleSidebar),
             Command::Settings => self.open_settings(cx),
+            Command::Ask => self.toggle_ask(window, cx),
+            Command::Organize => self.organize_open_note(cx),
         }
     }
 
@@ -463,6 +474,8 @@ impl FormalNotes {
             .on_action(cx.listener(|this, _: &NewNote, window, cx| this.run(Command::NewNote, window, cx)))
             .on_action(cx.listener(|this, _: &NewFolder, window, cx| this.run(Command::NewFolder, window, cx)))
             .on_action(cx.listener(|this, _: &OpenPalette, _, cx| this.open_palette(Mode::Commands, cx)))
+            .on_action(cx.listener(|this, _: &AskNotes, window, cx| this.toggle_ask(window, cx)))
+            .on_action(cx.listener(|this, _: &OrganizeNote, _, cx| this.organize_open_note(cx)))
             .on_action(cx.listener(|this, _: &Search, _, cx| this.open_palette(Mode::Search, cx)))
             .on_action(cx.listener(|this, _: &GoHome, _, cx| this.go(Location::home(), cx)))
             .on_action(cx.listener(|this, _: &GoBack, _, cx| this.back(cx)))
@@ -597,16 +610,21 @@ impl Render for FormalNotes {
         let trash = self.render_trash(cx);
         let palette = self.render_palette(cx);
         let rename = self.render_rename(cx);
+        let open = self.open.clone();
+        self.automations.update(cx, |a, _| a.set_open(open));
         let toasts = toast_overlay("toasts")
             .toasts(self.notices.toasts().to_vec())
-            .on_dismiss(cx.listener(|this, e: &ToastDismissed, _, cx| {
-                this.notices.dismissed(&e.id);
+            .on_dismiss(cx.listener(|this, e: &ToastDismissed, window, cx| {
+                if let Some(entry) = this.notices.dismissed(&e.id, e.reason == DismissReason::User) {
+                    this.open_entry(&entry, window, cx);
+                }
                 cx.notify();
             }))
             .on_action(cx.listener(|this, e: &ToastActionClicked, _, cx| match this.notices.take_undo(&e.id) {
                 Some(Undo::Restore(name)) => this.restore(&name, cx),
                 Some(Undo::Trash(entry)) => this.trash(&entry, cx),
                 Some(Undo::Move(entry, back)) => this.move_entry(&entry, &back, cx),
+                Some(Undo::Organized(applied)) => this.undo_organized(&applied, cx),
                 None => {}
             }));
         let content = div()
@@ -638,7 +656,8 @@ impl Render for FormalNotes {
                     .flexible_space()
                     .item(icon_button("new-folder", Icon::FolderPlus).tooltip("New Folder").dispatch(NewFolder))
                     .item(icon_button("new-note", Icon::SquarePen).tooltip("New Note").dispatch(NewNote))
-                    .item(icon_button("search", Icon::Search).tooltip("Search Notes").dispatch(Search)),
+                    .item(icon_button("search", Icon::Search).tooltip("Search Notes").dispatch(Search))
+                    .item(icon_button("ask", Icon::Lightbulb).tooltip("Ask Your Notes").dispatch(AskNotes)),
             )
             .sidebar(
                 nd::components::sidebar()
@@ -655,6 +674,7 @@ impl Render for FormalNotes {
             )
             .content(content)
             .content_min_width(super::metrics::CONTENT_MIN)
+            .when_some(self.render_ask(cx), |scaffold, ask| scaffold.inspector(ask))
             .overlay(palette);
         self.actions(scaffold, cx)
     }

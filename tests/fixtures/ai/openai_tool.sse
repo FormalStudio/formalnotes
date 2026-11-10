@@ -1,0 +1,22 @@
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_81on5mghfH1cB29vD9xdn648","type":"function","function":{"name":"search_notes","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"query"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\":\""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"beta"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":" ship"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-oai_1794304104561_k3hdq","object":"chat.completion.chunk","created":1794304106,"model":"openai/gpt-5.4-mini","choices":[{"index":0,"delta":{},"finish_reason":null}]}
+
+data: [DONE]
+

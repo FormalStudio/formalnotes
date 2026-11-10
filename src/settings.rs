@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use nd::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::ai::{AssistantSettings, BrainDumpSettings};
 use crate::library::Sort;
 
 #[derive(Settings, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -19,6 +20,11 @@ pub struct NotesSettings {
     pub theme: ThemeChoice,
     /// How Home and folder pages order their cards.
     pub sort: SortOrder,
+    /// The model Ask and the automations use. The API key is kept in the keychain.
+    #[settings(section)]
+    pub assistant: AssistantSettings,
+    #[settings(section)]
+    pub brain_dumps: BrainDumpSettings,
 }
 
 impl Default for NotesSettings {
@@ -28,6 +34,8 @@ impl Default for NotesSettings {
             editor_width: EditorWidth::Standard,
             theme: ThemeChoice::System,
             sort: SortOrder::Modified,
+            assistant: AssistantSettings::default(),
+            brain_dumps: BrainDumpSettings::default(),
         }
     }
 }
@@ -137,18 +145,27 @@ pub fn set<V: Serialize>(cx: &mut App, key: &str, value: &V) {
 }
 
 /// The Settings window: the settings form, applied as it changes, as Mac settings windows are.
-pub struct SettingsWindow;
+pub struct SettingsWindow {
+    api_key: Entity<crate::views::api_key::ApiKey>,
+}
 
 impl Render for SettingsWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
+        v_flex()
+            .size_full()
+            .p(theme.spacing.lg)
+            .child(div().flex_1().min_h_0().child(settings_form::<NotesSettings>()))
+            .child(self.api_key.clone())
     }
 }
 
 /// Opens the Settings window, or brings the open one forward.
 pub fn open_window(cx: &mut App) -> Option<WindowHandle<SettingsWindow>> {
-    open_settings(cx, |_, cx| cx.new(|_| SettingsWindow))
+    open_settings(cx, |window, cx| {
+        let api_key = cx.new(|cx| crate::views::api_key::ApiKey::new(window, cx));
+        cx.new(|_| SettingsWindow { api_key })
+    })
 }
 
 #[cfg(test)]

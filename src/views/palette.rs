@@ -26,9 +26,11 @@ pub enum Command {
     MoveToTrash,
     ToggleSidebar,
     Settings,
+    Ask,
+    Organize,
 }
 
-const COMMANDS: [(&str, &str, Icon); 8] = [
+const COMMANDS: [(&str, &str, Icon); 10] = [
     ("cmd:new-note", "New Note", Icon::SquarePen),
     ("cmd:new-folder", "New Folder", Icon::Folder),
     ("cmd:home", "Go Home", Icon::House),
@@ -37,6 +39,8 @@ const COMMANDS: [(&str, &str, Icon); 8] = [
     ("cmd:move-to-trash", "Move Note to Trash", Icon::Trash),
     ("cmd:sidebar", "Toggle Sidebar", Icon::PanelLeft),
     ("cmd:settings", "Settings", Icon::Settings),
+    ("cmd:ask", "Ask Your Notes", Icon::Lightbulb),
+    ("cmd:organize", "Organize This Note", Icon::Archive),
 ];
 
 impl Command {
@@ -53,6 +57,8 @@ impl Command {
             "cmd:move-to-trash" => Command::MoveToTrash,
             "cmd:sidebar" => Command::ToggleSidebar,
             "cmd:settings" => Command::Settings,
+            "cmd:ask" => Command::Ask,
+            "cmd:organize" => Command::Organize,
             _ => return None,
         })
     }
@@ -66,7 +72,8 @@ impl Command {
             Command::MoveToTrash => shortcut(&actions::MoveToTrash),
             Command::ToggleSidebar => shortcut(&nd::actions::ToggleSidebar),
             Command::Settings => shortcut(&actions::OpenSettings),
-            Command::Open(_) | Command::Trash => None,
+            Command::Ask => shortcut(&actions::AskNotes),
+            Command::Open(_) | Command::Trash | Command::Organize => None,
         }
     }
 }
@@ -111,7 +118,8 @@ pub fn items(library: &Library, mode: Mode, query: &str, note_open: bool) -> Vec
             .subtitle(place(&folder.id.0))
             .icon(Icon::Folder)
     }));
-    let commands = COMMANDS.into_iter().filter(|(id, ..)| note_open || *id != "cmd:move-to-trash");
+    let commands =
+        COMMANDS.into_iter().filter(|(id, ..)| note_open || !matches!(*id, "cmd:move-to-trash" | "cmd:organize"));
     rows.extend(fuzzy::rank(query, commands, |c| c.1).map(|(id, title, icon)| {
         let hint = Command::parse(id).and_then(|c| c.hint());
         palette_item(id, title).icon(icon).when_some(hint, |item, keys| item.hint(keys))
