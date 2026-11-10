@@ -135,6 +135,8 @@ pub struct FolderFace<'a> {
     /// The first note's text, drawn on the front paper.
     pub first_page: Option<&'a str>,
     pub hovered: bool,
+    /// A dragged entry is over it: it opens and rings in the accent.
+    pub targeted: bool,
 }
 
 /// The resting pose of each paper, front first: its left edge and top, as shares of the card,
@@ -144,9 +146,10 @@ const PAPERS: [(f32, f32, f32); 3] = [(0.10, 0.17, 10.), (0.15, 0.135, 7.), (0.0
 
 pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
     let papers = face.items.clamp(1, 3);
+    let open = face.hovered || face.targeted;
     let paper = |i: usize| {
         let (left, top, rise) = PAPERS[i];
-        let y = if face.hovered { -rise } else { 0. };
+        let y = if open { -rise } else { 0. };
         let content = match (i, face.first_page) {
             (0, Some(page)) => v_flex()
                 .gap(px(1.))
@@ -176,7 +179,7 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
             .offset(px(0.), px(y))
             .animate(motion::paper(i))
     };
-    let front_y = if face.hovered { 2. } else { 0. };
+    let front_y = if open { 2. } else { 0. };
     div()
         .size_full()
         .relative()
@@ -240,6 +243,19 @@ pub fn folder_card(theme: &Theme, face: FolderFace<'_>) -> Div {
                         .text_size(theme.type_scale.caption)
                         .text_color(theme.text.secondary),
                 ),
+        )
+        .child(
+            div()
+                .absolute()
+                .top(px(-DROP_RING_OUTSET))
+                .left(px(-DROP_RING_OUTSET))
+                .right(px(-DROP_RING_OUTSET))
+                .bottom(px(-DROP_RING_OUTSET))
+                .rounded(px(FOLDER_RADIUS + DROP_RING_OUTSET))
+                .border_2()
+                .border_color(theme.accent)
+                .opacity(if face.targeted { 1. } else { 0. })
+                .animate(motion::hover(face.targeted)),
         )
 }
 

@@ -37,6 +37,10 @@ pub const PREVIEW_HEADING: f32 = 8.;
 
 /// Folder cards: the plate's radius, the tab's share of the width and its rise.
 pub const FOLDER_RADIUS: f32 = 18.;
+/// A folder card a dragged entry is over grows by this much.
+pub const DROP_SCALE: f32 = 1.04;
+/// How far outside a folder card the ring shows while a dragged entry is over it.
+pub const DROP_RING_OUTSET: f32 = 4.;
 pub const FOLDER_TAB_WIDTH: f32 = 0.4;
 pub const FOLDER_TAB_RISE: f32 = 0.06;
 pub const PAPER_RADIUS: f32 = 10.;

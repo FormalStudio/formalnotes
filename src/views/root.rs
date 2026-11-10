@@ -34,6 +34,8 @@ pub struct FormalNotes {
     pub(super) expanded: HashSet<FolderId>,
     /// The card under the pointer, which lifts.
     pub(super) hovered: Option<SharedString>,
+    /// The folder card a dragged entry is over, which opens to take it.
+    pub(super) drop_target: Option<SharedString>,
     /// The content region's size: the presented note grows to it, and the card grid takes its
     /// columns from its width.
     pub(super) region: Option<(f32, f32)>,
@@ -79,6 +81,7 @@ impl FormalNotes {
             switching: None,
             expanded: HashSet::new(),
             hovered: None,
+            drop_target: None,
             region: None,
             sidebar_width: super::metrics::SIDEBAR_WIDTH,
             palette: None,
@@ -289,9 +292,20 @@ impl FormalNotes {
     }
 
     pub fn move_entry(&mut self, entry: &EntryId, folder: &FolderId, cx: &mut Context<Self>) {
+        let title = self.title_of(entry, cx);
+        let from = match entry {
+            EntryId::Note(n) => n.folder(),
+            EntryId::Folder(f) => f.parent().unwrap_or_default(),
+        };
         let moved = self.store.update(cx, |store, cx| store.move_into(entry, folder, cx));
+        if moved == *entry {
+            return;
+        }
         self.follow(entry, &moved, cx);
         self.reveal_in_sidebar(folder);
+        let to = if folder.is_root() { "Home" } else { folder.name() };
+        self.notices.show(format!("Moved “{title}” to {to}"), Some(Undo::Move(moved, from)));
+        cx.notify();
     }
 
     /// Keeps the page, the open note and open branches on an entry that moved.
@@ -580,6 +594,7 @@ impl Render for FormalNotes {
         let page = self.render_page(window, cx);
         let note = self.render_note(cx);
         let sidebar = self.render_sidebar(cx);
+        let trash = self.render_trash(cx);
         let palette = self.render_palette(cx);
         let rename = self.render_rename(cx);
         let toasts = toast_overlay("toasts")
@@ -591,6 +606,7 @@ impl Render for FormalNotes {
             .on_action(cx.listener(|this, e: &ToastActionClicked, _, cx| match this.notices.take_undo(&e.id) {
                 Some(Undo::Restore(name)) => this.restore(&name, cx),
                 Some(Undo::Trash(entry)) => this.trash(&entry, cx),
+                Some(Undo::Move(entry, back)) => this.move_entry(&entry, &back, cx),
                 None => {}
             }));
         let content = div()
@@ -634,7 +650,8 @@ impl Render for FormalNotes {
                         this.sidebar_width = e.width;
                         cx.notify();
                     }))
-                    .child(sidebar),
+                    .child(sidebar)
+                    .footer(trash),
             )
             .content(content)
             .content_min_width(super::metrics::CONTENT_MIN)
