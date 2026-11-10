@@ -181,7 +181,10 @@ impl Render for SettingsWindow {
         } else if self.tab.as_ref() == ASSISTANT_TAB {
             div().size_full().p(theme.spacing.lg).child(self.assistant.clone())
         } else {
-            div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
+            div()
+                .size_full()
+                .p(theme.spacing.lg)
+                .child(settings_form::<NotesSettings>().without_sections(["assistant", "sharing"]))
         };
         div().size_full().child(tabs).child(body)
     }

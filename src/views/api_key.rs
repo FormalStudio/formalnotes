@@ -126,6 +126,10 @@ impl Render for ApiKey {
             self.refresh(provider, cx);
         }
         let key = self.key_section(provider, cx);
-        form().child(key).children(super::sharing::section(cx))
+        let pane = settings_form::<NotesSettings>().sections(["assistant", "sharing"]).child(key);
+        match super::sharing::section(cx) {
+            Some(sharing) => pane.child(sharing),
+            None => pane,
+        }
     }
 }
