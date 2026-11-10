@@ -1,4 +1,5 @@
 // The user's model: provider, model and base URL in the library's settings, the key in the keychain.
+// A computer's access code is kept apart from the provider key, so switching back loses neither.
 
 import { useSyncExternalStore } from 'react';
 
@@ -7,7 +8,7 @@ import { library } from './library';
 import { secure } from './secure';
 
 const SETTINGS = 'ai.settings';
-const KEY = 'ai.key';
+const keyOf = (provider: Provider) => (provider === 'computer' ? 'ai.code' : 'ai.key');
 
 type AiState = { settings: AiSettings; hasKey: boolean; loaded: boolean };
 
@@ -19,7 +20,7 @@ function read(): AiSettings {
   if (!raw) return DEFAULTS.anthropic;
   try {
     const s = JSON.parse(raw) as Partial<AiSettings>;
-    const provider: Provider = s.provider === 'openai' ? 'openai' : 'anthropic';
+    const provider: Provider = s.provider === 'openai' || s.provider === 'computer' ? s.provider : 'anthropic';
     return { ...DEFAULTS[provider], ...s, provider };
   } catch {
     return DEFAULTS.anthropic;
@@ -31,10 +32,16 @@ function set(patch: Partial<AiState>) {
   for (const l of listeners) l();
 }
 
-void secure
-  .get(KEY)
-  .then((k) => set({ hasKey: !!k, loaded: true }))
-  .catch(() => set({ loaded: true }));
+function loadKey() {
+  const provider = state.settings.provider;
+  void secure
+    .get(keyOf(provider))
+    .then((k) => {
+      if (state.settings.provider === provider) set({ hasKey: !!k, loaded: true });
+    })
+    .catch(() => set({ loaded: true }));
+}
+loadKey();
 
 export const ai = {
   subscribe(l: () => void) {
@@ -42,7 +49,7 @@ export const ai = {
     return () => listeners.delete(l);
   },
   get: () => state,
-  key: () => secure.get(KEY),
+  key: () => secure.get(keyOf(state.settings.provider)),
   update(patch: Partial<AiSettings>) {
     const next = { ...state.settings, ...patch };
     library.setMeta(SETTINGS, JSON.stringify(next));
@@ -52,12 +59,14 @@ export const ai = {
   setProvider(provider: Provider) {
     if (provider === state.settings.provider) return;
     library.setMeta(SETTINGS, JSON.stringify(DEFAULTS[provider]));
-    set({ settings: DEFAULTS[provider] });
+    set({ settings: DEFAULTS[provider], hasKey: false });
+    loadKey();
   },
   async setKey(key: string) {
     const k = key.trim();
-    if (k === '') await secure.remove(KEY);
-    else await secure.set(KEY, k);
+    const slot = keyOf(state.settings.provider);
+    if (k === '') await secure.remove(slot);
+    else await secure.set(slot, k);
     set({ hasKey: k !== '' });
   },
 };

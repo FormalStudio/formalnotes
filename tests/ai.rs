@@ -155,8 +155,8 @@ fn openai_requests_carry_tool_calls_results_and_a_forced_choice() {
             },
         ],
         tools: vec![formalnotes::ai::chat::ToolSpec {
-            name: "file_notes",
-            description: "d",
+            name: "file_notes".into(),
+            description: "d".into(),
             schema: json!({ "type": "object" }),
         }],
         choice: Choice::Required("file_notes"),
@@ -205,7 +205,10 @@ fn the_tool_loop_searches_reads_and_answers() {
     assert_eq!(added.last().unwrap().text(), "The beta ships on the 14th [[Projects/Meeting notes.md]].");
     let seen = script.seen();
     assert_eq!(seen.len(), 3);
-    assert_eq!(seen[0].tools.iter().map(|t| t.name).collect::<Vec<_>>(), ["search_notes", "read_note", "list_folders"]);
+    assert_eq!(
+        seen[0].tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        ["search_notes", "read_note", "list_folders"]
+    );
     let result = |request: &Request| match &request.messages.last().unwrap().content[0] {
         Block::ToolResult { content, is_error, .. } => (content.clone(), *is_error),
         other => panic!("{other:?}"),

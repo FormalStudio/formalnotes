@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use nd::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::ai::{AssistantSettings, BrainDumpSettings};
+use crate::ai::{AssistantSettings, BrainDumpSettings, SharingSettings};
 use crate::library::Sort;
 
 #[derive(Settings, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -25,6 +25,8 @@ pub struct NotesSettings {
     pub assistant: AssistantSettings,
     #[settings(section)]
     pub brain_dumps: BrainDumpSettings,
+    #[settings(section)]
+    pub sharing: SharingSettings,
 }
 
 impl Default for NotesSettings {
@@ -36,6 +38,7 @@ impl Default for NotesSettings {
             sort: SortOrder::Modified,
             assistant: AssistantSettings::default(),
             brain_dumps: BrainDumpSettings::default(),
+            sharing: SharingSettings::default(),
         }
     }
 }
@@ -145,14 +148,16 @@ pub fn set<V: Serialize>(cx: &mut App, key: &str, value: &V) {
 }
 
 pub const GENERAL_TAB: &str = "general";
+pub const ASSISTANT_TAB: &str = "assistant";
 pub const ACCOUNT_TAB: &str = "account";
 
 /// The Settings window: the settings form, applied as it changes, as Mac settings windows are,
+/// what the assistant keeps outside the settings file (the key, the sharing address and code),
 /// and the sync account.
 pub struct SettingsWindow {
     tab: SharedString,
     account: Entity<crate::views::account::AccountPane>,
-    api_key: Entity<crate::views::api_key::ApiKey>,
+    assistant: Entity<crate::views::api_key::ApiKey>,
 }
 
 impl SettingsWindow {
@@ -167,17 +172,16 @@ impl Render for SettingsWindow {
         let theme = cx.theme();
         let tabs = toolbar()
             .tab(GENERAL_TAB, "General", Icon::Settings)
+            .tab(ASSISTANT_TAB, "Assistant", Icon::Lightbulb)
             .tab(ACCOUNT_TAB, "Account", Icon::User)
             .selected_tab(self.tab.clone())
             .on_tab(cx.listener(|this, e: &TabSelected, _, cx| this.select(&e.id, cx)));
         let body = if self.tab.as_ref() == ACCOUNT_TAB {
             div().size_full().p(theme.spacing.lg).child(self.account.clone())
+        } else if self.tab.as_ref() == ASSISTANT_TAB {
+            div().size_full().p(theme.spacing.lg).child(self.assistant.clone())
         } else {
-            v_flex()
-                .size_full()
-                .p(theme.spacing.lg)
-                .child(div().flex_1().min_h_0().child(settings_form::<NotesSettings>()))
-                .child(self.api_key.clone())
+            div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
         };
         div().size_full().child(tabs).child(body)
     }
@@ -196,8 +200,8 @@ pub fn open_tab(cx: &mut App, tab: &str) -> Option<WindowHandle<SettingsWindow>>
     let tab = SharedString::from(tab.to_owned());
     let handle = open_settings(cx, move |window, cx| {
         let account = cx.new(|cx| crate::views::account::AccountPane::new(window, cx));
-        let api_key = cx.new(|cx| crate::views::api_key::ApiKey::new(window, cx));
-        cx.new(|_| SettingsWindow { tab, account, api_key })
+        let assistant = cx.new(|cx| crate::views::api_key::ApiKey::new(window, cx));
+        cx.new(|_| SettingsWindow { tab, account, assistant })
     })?;
     cx.set_global(OpenWindow(handle.root().downgrade()));
     Some(handle)

@@ -20,6 +20,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 pollster = "0.4"
 sha2 = "0.10"
+tiny_http = "0.12"
 unicode-normalization = "0.1"
 ureq = "3.4"
 

@@ -7,13 +7,14 @@ use nd::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::chat::{AiError, Endpoint, Http, Provider, Transport};
+use super::claude_code::ClaudeCode;
 
 #[derive(Settings, Clone, PartialEq, Debug, Serialize, Deserialize, JsonSchema)]
 #[schemars(crate = "nd::schemars")]
 #[serde(default, deny_unknown_fields)]
 pub struct AssistantSettings {
-    /// The wire format your provider speaks. Requests go from this computer straight to it,
-    /// with your own key.
+    /// The wire format your provider speaks; requests go from this computer straight to it,
+    /// with your own key. Or Claude Code installed on this computer, which needs no key.
     pub provider: Provider,
     /// Empty uses the provider's current model.
     pub model: String,
@@ -54,19 +55,39 @@ impl Default for BrainDumpSettings {
     }
 }
 
+#[derive(Settings, Clone, PartialEq, Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(crate = "nd::schemars")]
+#[serde(default, deny_unknown_fields)]
+pub struct SharingSettings {
+    /// Lets your other devices use Claude Code on this computer for Ask. The address and
+    /// access code they need are under Assistant.
+    pub enabled: bool,
+    /// The port your devices connect to.
+    pub port: u16,
+}
+
+impl Default for SharingSettings {
+    fn default() -> Self {
+        Self { enabled: false, port: 47600 }
+    }
+}
+
 /// Opens a transport for the settings in effect. Runs off the main thread: the keychain read
 /// can wait on the OS.
 pub trait Connect: Send + Sync {
     fn connect(&self, settings: &AssistantSettings) -> Result<Arc<dyn Transport>, AiError>;
 }
 
-/// The real one: the key from the keychain, HTTPS to the provider.
+/// The real one: the key from the keychain and HTTPS to the provider, or Claude Code.
 pub struct Keychain;
 
 impl Connect for Keychain {
     fn connect(&self, settings: &AssistantSettings) -> Result<Arc<dyn Transport>, AiError> {
         let provider = settings.provider;
-        let key = crate::secrets::get(provider.key_account())
+        let Some(account) = provider.key_account() else {
+            return Ok(Arc::new(ClaudeCode { model: settings.model() }));
+        };
+        let key = crate::secrets::get(account)
             .map_err(|e| AiError::Keychain(e.to_string()))?
             .filter(|k| !k.trim().is_empty())
             .ok_or(AiError::NoKey(provider))?;

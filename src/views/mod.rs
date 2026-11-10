@@ -16,6 +16,7 @@ mod notices;
 mod page;
 pub mod palette;
 mod root;
+pub mod sharing;
 mod sidebar;
 pub mod strip;
 pub mod sync_status;

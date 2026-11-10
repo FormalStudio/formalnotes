@@ -1,5 +1,6 @@
-//! The API key row of the Settings window. The key goes to the keychain, never to the settings
-//! file, and is never shown again once saved: the row says whether one is stored.
+//! The Assistant pane of the Settings window: the API key and, while sharing is on, where a
+//! device connects. The key goes to the keychain, never to the settings file, and is never
+//! shown again once saved: the row says whether one is stored.
 
 use nd::prelude::*;
 
@@ -12,6 +13,8 @@ enum Stored {
     Yes,
     No,
     Failed(String),
+    /// The provider takes no key.
+    NotNeeded,
 }
 
 pub struct ApiKey {
@@ -30,7 +33,11 @@ impl ApiKey {
         self.provider = Some(provider);
         self.stored = Stored::Unknown;
         let this = cx.weak_entity();
-        nd::system::spawn(async move { crate::secrets::get(provider.key_account()) }, move |found, cx| {
+        let Some(account) = provider.key_account() else {
+            self.stored = Stored::NotNeeded;
+            return;
+        };
+        nd::system::spawn(async move { crate::secrets::get(account) }, move |found, cx| {
             let _ = this.update(cx, |this, cx| {
                 if this.provider == Some(provider) {
                     this.stored = match found {
@@ -55,7 +62,7 @@ impl ApiKey {
 
     fn write(&mut self, provider: Provider, key: Option<String>, cx: &mut Context<Self>) {
         let this = cx.weak_entity();
-        let account = provider.key_account();
+        let Some(account) = provider.key_account() else { return };
         nd::system::spawn(
             async move {
                 match key {
@@ -70,42 +77,55 @@ impl ApiKey {
     }
 }
 
+impl ApiKey {
+    fn key_section(&self, provider: Provider, cx: &mut Context<Self>) -> FormSection {
+        if self.stored == Stored::NotNeeded {
+            return form_section()
+                .title("API key")
+                .footer(format!("{} runs on this computer, on the account it is signed in to there.", provider.name()))
+                .child(form_row(provider.name()).id("api-key.row").child(label("Needs no key").secondary()));
+        }
+        let footer = match &self.stored {
+            Stored::Unknown | Stored::NotNeeded => "Kept in your keychain, never in the settings file.".to_owned(),
+            Stored::Yes => format!("Your {} key is in your keychain. Save a new one to replace it.", provider.name()),
+            Stored::No => format!("No {} key yet. Paste one to use Ask and the automations.", provider.name()),
+            Stored::Failed(e) => format!("Could not read the keychain: {e}"),
+        };
+        form_section().title("API key").footer(footer).child(
+            form_row(format!("{} key", provider.name())).id("api-key.row").child(
+                h_flex()
+                    .gap(cx.theme().spacing.sm)
+                    .child(
+                        secure_field("api-key")
+                            .bind(&self.field)
+                            .label("API key")
+                            .placeholder(if self.stored == Stored::Yes { "Saved" } else { "Paste your key" })
+                            .w(px(220.))
+                            .on_submit(cx.listener(|this, _: &TextSubmitted, window, cx| this.save(window, cx))),
+                    )
+                    .child(
+                        button("api-key-save", "Save")
+                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.save(window, cx))),
+                    )
+                    .when(self.stored == Stored::Yes, |row| {
+                        row.child(
+                            button("api-key-remove", "Remove").on_click(
+                                cx.listener(move |this, _: &ClickEvent, _, cx| this.write(provider, None, cx)),
+                            ),
+                        )
+                    }),
+            ),
+        )
+    }
+}
+
 impl Render for ApiKey {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let provider = cx.settings::<NotesSettings>().assistant.provider;
         if self.provider != Some(provider) {
             self.refresh(provider, cx);
         }
-        let footer = match &self.stored {
-            Stored::Unknown => "Kept in your keychain, never in the settings file.".to_owned(),
-            Stored::Yes => format!("Your {} key is in your keychain. Save a new one to replace it.", provider.name()),
-            Stored::No => format!("No {} key yet. Paste one to use Ask and the automations.", provider.name()),
-            Stored::Failed(e) => format!("Could not read the keychain: {e}"),
-        };
-        form().child(
-            form_section().title("API key").footer(footer).child(
-                form_row(format!("{} key", provider.name())).id("api-key.row").child(
-                    h_flex()
-                        .gap(cx.theme().spacing.sm)
-                        .child(
-                            secure_field("api-key")
-                                .bind(&self.field)
-                                .label("API key")
-                                .placeholder(if self.stored == Stored::Yes { "Saved" } else { "Paste your key" })
-                                .w(px(220.))
-                                .on_submit(cx.listener(|this, _: &TextSubmitted, window, cx| this.save(window, cx))),
-                        )
-                        .child(
-                            button("api-key-save", "Save")
-                                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.save(window, cx))),
-                        )
-                        .when(self.stored == Stored::Yes, |row| {
-                            row.child(button("api-key-remove", "Remove").on_click(
-                                cx.listener(move |this, _: &ClickEvent, _, cx| this.write(provider, None, cx)),
-                            ))
-                        }),
-                ),
-            ),
-        )
+        let key = self.key_section(provider, cx);
+        form().child(key).children(super::sharing::section(cx))
     }
 }

@@ -1,18 +1,26 @@
 // Ask: a question answered by the user's own model through a tool loop over the local library.
-// Anthropic Messages or an OpenAI-compatible chat completions endpoint, both streamed.
+// Anthropic Messages or an OpenAI-compatible chat completions endpoint, both streamed. "computer" is
+// the desktop app sharing its Claude Code: it speaks Anthropic Messages at the user's own address.
 
 import type { Library } from '../library/store';
 import { readSse } from './sse';
 import { SYSTEM_PROMPT, TOOLS, runTool } from './tools';
 
-export type Provider = 'anthropic' | 'openai';
+export type Provider = 'anthropic' | 'openai' | 'computer';
 
 export type AiSettings = { provider: Provider; model: string; baseUrl: string };
 
 export const DEFAULTS: Record<Provider, AiSettings> = {
   anthropic: { provider: 'anthropic', model: 'claude-opus-5-5', baseUrl: 'https://api.anthropic.com' },
   openai: { provider: 'openai', model: 'gpt-5', baseUrl: 'https://api.openai.com/v1' },
+  computer: { provider: 'computer', model: '', baseUrl: '' },
 };
+
+/** The address as typed, with the scheme people leave off. */
+export function baseOf(settings: AiSettings): string {
+  const typed = settings.baseUrl.trim().replace(/\/+$/, '');
+  return settings.provider === 'computer' && typed !== '' && !/^https?:\/\//i.test(typed) ? `http://${typed}` : typed;
+}
 
 export type AskErrorKind = 'no_key' | 'bad_key' | 'offline' | 'refused' | 'rate_limited' | 'failed';
 
@@ -101,7 +109,7 @@ async function askAnthropic(ctx: Ctx, question: string): Promise<void> {
     input_schema: t.parameters,
     eager_input_streaming: true,
   }));
-  const base = ctx.settings.baseUrl.replace(/\/+$/, '');
+  const base = baseOf(ctx.settings);
   const fallbacks = FALLBACK_MODELS.has(ctx.settings.model) && base === DEFAULTS.anthropic.baseUrl;
   const headers: Record<string, string> = { 'x-api-key': ctx.key, 'anthropic-version': ANTHROPIC_VERSION };
   if (fallbacks) headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
@@ -232,8 +240,8 @@ export async function ask(
   question: string,
   opts: { settings: AiSettings; key: string | null; lib: Library; fetch: StreamFetch; emit: (e: AskEvent) => void; signal?: AbortSignal },
 ): Promise<void> {
-  if (!opts.key) throw new AskError('no_key', 'Add a key in Settings to ask your notes.');
+  if (!opts.key || baseOf(opts.settings) === '') throw new AskError('no_key', 'Add a key in Settings to ask your notes.');
   const ctx: Ctx = { ...opts, key: opts.key };
-  if (opts.settings.provider === 'anthropic') await askAnthropic(ctx, question);
-  else await askOpenAI(ctx, question);
+  if (opts.settings.provider === 'openai') await askOpenAI(ctx, question);
+  else await askAnthropic(ctx, question);
 }

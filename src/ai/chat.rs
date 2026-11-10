@@ -25,6 +25,9 @@ pub enum Provider {
     /// OpenAI chat completions, or any endpoint that speaks them.
     #[serde(rename = "OpenAI")]
     OpenAi,
+    /// Claude Code installed on this computer, on the account it is signed in to. No key.
+    #[serde(rename = "Claude Code")]
+    ClaudeCode,
 }
 
 impl Provider {
@@ -32,6 +35,7 @@ impl Provider {
         match self {
             Provider::Anthropic => "Anthropic",
             Provider::OpenAi => "OpenAI",
+            Provider::ClaudeCode => "Claude Code",
         }
     }
 
@@ -39,6 +43,8 @@ impl Provider {
         match self {
             Provider::Anthropic => "claude-sonnet-5-5",
             Provider::OpenAi => "gpt-5.5",
+            // Empty leaves the choice to Claude Code.
+            Provider::ClaudeCode => "",
         }
     }
 
@@ -47,14 +53,17 @@ impl Provider {
         match self {
             Provider::Anthropic => "https://api.anthropic.com",
             Provider::OpenAi => "https://api.openai.com/v1",
+            Provider::ClaudeCode => "",
         }
     }
 
-    /// The keychain account the provider's key is stored under.
-    pub fn key_account(self) -> &'static str {
+    /// The keychain account the provider's key is stored under; none for a provider that
+    /// takes no key.
+    pub fn key_account(self) -> Option<&'static str> {
         match self {
-            Provider::Anthropic => "anthropic-api-key",
-            Provider::OpenAi => "openai-api-key",
+            Provider::Anthropic => Some("anthropic-api-key"),
+            Provider::OpenAi => Some("openai-api-key"),
+            Provider::ClaudeCode => None,
         }
     }
 }
@@ -134,8 +143,8 @@ impl Message {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToolSpec {
-    pub name: &'static str,
-    pub description: &'static str,
+    pub name: String,
+    pub description: String,
     /// JSON Schema of the input object.
     pub schema: Value,
 }
@@ -180,10 +189,17 @@ pub enum AiError {
     Unauthorized,
     RateLimited,
     Network(String),
-    Server { status: u16, message: String },
+    Server {
+        status: u16,
+        message: String,
+    },
     Refused,
     BadReply(String),
     Cancelled,
+    /// Claude Code is not installed where the app can find it.
+    NoClaudeCode,
+    /// Claude Code ran and said why it could not answer (not signed in, out of usage).
+    ClaudeCode(String),
 }
 
 impl AiError {
@@ -204,7 +220,16 @@ impl AiError {
             AiError::Refused => "The model declined to answer this.".to_owned(),
             AiError::BadReply(_) => "The model's reply could not be read. Try again.".to_owned(),
             AiError::Cancelled => "Stopped.".to_owned(),
+            AiError::NoClaudeCode => {
+                "Claude Code is not installed on this computer. Install it, sign in, and try again.".to_owned()
+            }
+            AiError::ClaudeCode(message) => format!("Claude Code could not answer: {}", short(message)),
         }
+    }
+
+    /// Whether the fix is the API key.
+    pub fn wants_key(&self) -> bool {
+        matches!(self, AiError::NoKey(_) | AiError::Keychain(_) | AiError::Unauthorized)
     }
 
     /// Whether the fix is in Settings (the key, the model, the address).
@@ -214,6 +239,7 @@ impl AiError {
             AiError::NoKey(_)
                 | AiError::Keychain(_)
                 | AiError::Unauthorized
+                | AiError::NoClaudeCode
                 | AiError::Network(_)
                 | AiError::Server { status: 400..=404, .. }
         )
@@ -251,7 +277,7 @@ pub fn read_stream(
     cancel: &Cancel,
 ) -> Result<Reply, AiError> {
     let mut parser: Box<dyn StreamParser> = match provider {
-        Provider::Anthropic => Box::new(anthropic::Parser::default()),
+        Provider::Anthropic | Provider::ClaudeCode => Box::new(anthropic::Parser::default()),
         Provider::OpenAi => Box::new(openai::Parser::default()),
     };
     let mut lines = sse::Lines::default();
@@ -280,7 +306,7 @@ impl Http {
         let base = self.endpoint.base_url.trim().trim_end_matches('/');
         let base = if base.is_empty() { self.endpoint.provider.default_base() } else { base };
         match self.endpoint.provider {
-            Provider::Anthropic => format!("{base}/v1/messages"),
+            Provider::Anthropic | Provider::ClaudeCode => format!("{base}/v1/messages"),
             Provider::OpenAi => format!("{base}/chat/completions"),
         }
     }
@@ -289,7 +315,7 @@ impl Http {
 /// The JSON body `request` goes out as.
 pub fn body(provider: Provider, request: &Request, model: &str) -> Value {
     match provider {
-        Provider::Anthropic => anthropic::body(request, model),
+        Provider::Anthropic | Provider::ClaudeCode => anthropic::body(request, model),
         Provider::OpenAi => openai::body(request, model),
     }
 }
@@ -306,7 +332,9 @@ impl Transport for Http {
             .into();
         let call = agent.post(self.url()).header("content-type", "application/json");
         let call = match endpoint.provider {
-            Provider::Anthropic => call.header("x-api-key", &endpoint.key).header("anthropic-version", "2026-10-21"),
+            Provider::Anthropic | Provider::ClaudeCode => {
+                call.header("x-api-key", &endpoint.key).header("anthropic-version", "2026-10-21")
+            }
             Provider::OpenAi => call.header("authorization", &format!("Bearer {}", endpoint.key)),
         };
         let response = call.send(body.to_string()).map_err(|e| AiError::Network(e.to_string()))?;

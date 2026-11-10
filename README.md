@@ -41,6 +41,16 @@ Bring your own model. In Settings, pick the provider format (Anthropic or OpenAI
 key, and optionally set a model or a base URL for a gateway or a local server. The key goes in
 the OS keychain. Requests go from your device straight to the provider.
 
+Or use Claude Code. With the provider set to Claude Code, the desktop app runs the `claude`
+command installed on that computer, on the account it is signed in to, and needs no key.
+Claude Code gets the question and the app's note tools and nothing else: its own tools are
+off, so it cannot read files or run commands.
+
+Turn on Sharing in Settings and the desktop app also answers Ask for your phone. It shows an
+address and an access code under Assistant; on the phone, choose Your Computer as the
+provider and enter both. The phone still searches its own copy of the notes; the computer
+only lends the model. The connection is plain HTTP, so keep it to your own network or a VPN.
+
 - **Ask Your Notes** (`Shift+Cmd+A`) answers from your library and links the notes it used.
 - **Organize brain dumps** is off until you turn it on. Write anything into the inbox folder
   (`Inbox` by default). After the note has rested for five minutes the model splits it into

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use super::chat::{AiError, Block, Choice, Message, Reply, Request, Role, Stop, StreamParser};
+use super::chat::{AiError, Block, Choice, Message, Reply, Request, Role, Stop, StreamParser, ToolSpec};
 use super::sse;
 
 pub fn body(request: &Request, model: &str) -> Value {
@@ -54,6 +54,53 @@ fn message(message: &Message) -> Value {
         })
         .collect();
     json!({ "role": role, "content": content })
+}
+
+/// A request body read back into a request, as a server that speaks this format receives it.
+pub fn request(body: &Value) -> Result<Request, String> {
+    let messages = body.get("messages").and_then(Value::as_array).ok_or("messages is missing")?;
+    let messages = messages
+        .iter()
+        .map(|m| {
+            let role = match m.get("role").and_then(Value::as_str) {
+                Some("user") => Role::User,
+                Some("assistant") => Role::Assistant,
+                other => return Err(format!("unknown role {other:?}")),
+            };
+            let content = match m.get("content") {
+                Some(Value::String(text)) => vec![Block::Text(text.clone())],
+                Some(Value::Array(blocks)) => blocks.iter().cloned().map(block).collect(),
+                _ => return Err("a message has no content".to_owned()),
+            };
+            Ok(Message { role, content })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let field = |value: &Value, name: &str| value.get(name).and_then(Value::as_str).unwrap_or_default().to_owned();
+    let tools = body.get("tools").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    let tools = tools
+        .iter()
+        .map(|t| ToolSpec {
+            name: field(t, "name"),
+            description: field(t, "description"),
+            schema: t.get("input_schema").cloned().unwrap_or_else(|| json!({ "type": "object" })),
+        })
+        .collect();
+    Ok(Request {
+        system: body.get("system").map(plain).unwrap_or_default(),
+        messages,
+        tools,
+        choice: Choice::Auto,
+        max_tokens: body.get("max_tokens").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()).unwrap_or(4096),
+    })
+}
+
+/// Text given as a string or as a list of text blocks.
+fn plain(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(blocks) => blocks.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect(),
+        _ => String::new(),
+    }
 }
 
 /// Rebuilds the reply's content blocks from their start events and deltas. Blocks the app does
@@ -140,6 +187,11 @@ fn block(raw: Value) -> Block {
             id: text("id"),
             name: text("name"),
             input: raw.get("input").cloned().unwrap_or_else(|| json!({})),
+        },
+        Some("tool_result") => Block::ToolResult {
+            id: text("tool_use_id"),
+            content: raw.get("content").map(plain).unwrap_or_default(),
+            is_error: raw.get("is_error").and_then(Value::as_bool).unwrap_or(false),
         },
         _ => Block::Opaque(raw),
     }

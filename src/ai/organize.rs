@@ -139,9 +139,10 @@ pub fn library_outline(library: &Library, inbox: &FolderId) -> String {
 
 fn file_notes_tool() -> ToolSpec {
     ToolSpec {
-        name: "file_notes",
+        name: "file_notes".into(),
         description: "Write the organized notes. Each goes into a folder (existing or new) with a title, a Markdown \
-                      body and the properties the dump gives values for.",
+                      body and the properties the dump gives values for."
+            .into(),
         schema: json!({
             "type": "object",
             "properties": {

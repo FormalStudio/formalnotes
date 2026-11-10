@@ -64,10 +64,12 @@ impl Tools for LibraryTools {
     fn specs(&self) -> Vec<ToolSpec> {
         vec![
             ToolSpec {
-                name: "search_notes",
-                description: "Search the user's notes by words or an exact phrase. Returns the best matches with their \
+                name: "search_notes".into(),
+                description:
+                    "Search the user's notes by words or an exact phrase. Returns the best matches with their \
                               path, title and a snippet. Search more than once with different words when the first \
-                              results miss.",
+                              results miss."
+                        .into(),
                 schema: json!({
                     "type": "object",
                     "properties": { "query": { "type": "string", "description": "Words or a phrase to look for." } },
@@ -75,8 +77,8 @@ impl Tools for LibraryTools {
                 }),
             },
             ToolSpec {
-                name: "read_note",
-                description: "Read one note in full by the path search_notes returned.",
+                name: "read_note".into(),
+                description: "Read one note in full by the path search_notes returned.".into(),
                 schema: json!({
                     "type": "object",
                     "properties": { "path": { "type": "string", "description": "The note's path, ending in .md." } },
@@ -84,8 +86,8 @@ impl Tools for LibraryTools {
                 }),
             },
             ToolSpec {
-                name: "list_folders",
-                description: "List every folder in the library with how many notes it holds.",
+                name: "list_folders".into(),
+                description: "List every folder in the library with how many notes it holds.".into(),
                 schema: json!({ "type": "object", "properties": {} }),
             },
         ]

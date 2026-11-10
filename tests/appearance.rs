@@ -59,6 +59,12 @@ fn main() {
             Some(window) => window.id(),
             None => panic!("a settings window was already open"),
         })
+        .window("settings-assistant", |cx| {
+            match formalnotes::settings::open_tab(cx, formalnotes::settings::ASSISTANT_TAB) {
+                Some(window) => window.id(),
+                None => panic!("a settings window was already open"),
+            }
+        })
         .window("settings-account", |cx| settings(cx, None))
         .window("settings-account-signed-in", |cx| {
             let usage = Usage { email: "ada@example.com".into(), objects: 128, bytes: 2_400_000, avatar: None };

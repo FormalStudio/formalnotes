@@ -38,8 +38,9 @@ export default function Settings() {
     }
   };
 
+  const computer = settings.provider === 'computer';
   const setKey = async () => {
-    const v = await askName({ title: 'API key', initial: '', confirm: 'Save', secure: true, allowEmpty: true });
+    const v = await askName({ title: computer ? 'Access code' : 'API key', initial: '', confirm: 'Save', secure: true, allowEmpty: true });
     if (v === null) return;
     await ai.setKey(v);
     haptic('success');
@@ -50,7 +51,7 @@ export default function Settings() {
       <FieldGroup>
         {account.email ? (
           <FieldGroup.Section>
-            <RNHostView matchContents>
+            <RNHostView matchContents={{ vertical: true }}>
               <ProfileHeader email={account.email} uri={account.avatar} detail={syncLine(account, now)} />
             </RNHostView>
           </FieldGroup.Section>
@@ -91,29 +92,34 @@ export default function Settings() {
               >
                 <Picker.Item label="Anthropic" value="anthropic" />
                 <Picker.Item label="OpenAI-compatible" value="openai" />
+                <Picker.Item label="Your Computer" value="computer" />
               </Picker>
             }
           >
             Provider
           </ListItem>
-          <ListItem supportingText={settings.model} onPress={() => void edit('Model', settings.model, (model) => ai.update({ model }))}>
-            Model
-          </ListItem>
+          {computer ? null : (
+            <ListItem supportingText={settings.model} onPress={() => void edit('Model', settings.model, (model) => ai.update({ model }))}>
+              Model
+            </ListItem>
+          )}
           <ListItem
-            supportingText={settings.baseUrl}
-            onPress={() => void edit('Base URL', settings.baseUrl, (baseUrl) => ai.update({ baseUrl }))}
+            supportingText={settings.baseUrl || 'Not set'}
+            onPress={() => void edit(computer ? 'Address' : 'Base URL', settings.baseUrl, (baseUrl) => ai.update({ baseUrl }))}
           >
-            Base URL
+            {computer ? 'Address' : 'Base URL'}
           </ListItem>
           <ListItem supportingText={hasKey ? 'Saved in the keychain' : 'Not set'} onPress={() => void setKey()}>
-            API key
+            {computer ? 'Access code' : 'API key'}
           </ListItem>
-          {settings.model !== DEFAULTS[settings.provider].model || settings.baseUrl !== DEFAULTS[settings.provider].baseUrl ? (
+          {!computer && (settings.model !== DEFAULTS[settings.provider].model || settings.baseUrl !== DEFAULTS[settings.provider].baseUrl) ? (
             <ListItem onPress={() => ai.update(DEFAULTS[settings.provider])}>Use the provider defaults</ListItem>
           ) : null}
           <FieldGroup.SectionFooter>
             <Text>
-              Questions go from this phone straight to your provider with your key. Only the notes the model asks to read leave the phone.
+              {computer
+                ? 'Answers come from Claude Code on your computer. In Formal Notes there, turn on Sharing in Settings and copy the address and access code it shows. Only the notes the model asks to read leave the phone.'
+                : 'Questions go from this phone straight to your provider with your key. Only the notes the model asks to read leave the phone.'}
             </Text>
           </FieldGroup.SectionFooter>
         </FieldGroup.Section>

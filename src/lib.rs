@@ -74,6 +74,7 @@ pub fn run() -> nd::Result<()> {
         }
         actions::init(cx);
         sync::init(cx);
+        views::sharing::follow(cx);
         open(cx);
     })
 }

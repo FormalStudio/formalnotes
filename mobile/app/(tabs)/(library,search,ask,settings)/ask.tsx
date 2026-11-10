@@ -11,7 +11,7 @@ import { GlassSurface } from '@/components/glass-surface';
 import { HeaderActions } from '@/components/header-actions';
 import { Icon } from '@/components/icon';
 import { markdownSpans } from '@/components/note/markdown';
-import { ask, AskError, type StreamFetch } from '@/lib/ai/ask';
+import { ask, AskError, baseOf, type AiSettings, type StreamFetch } from '@/lib/ai/ask';
 import { ai, useAi } from '@/lib/app/ai';
 import { capture } from '@/lib/app/actions';
 import { library, useLibrary } from '@/lib/app/library';
@@ -35,8 +35,8 @@ function activityOf(name: string, input: Record<string, unknown>): string {
 }
 
 const ERRORS: Record<AskError['kind'], { title: string; action?: 'settings' | 'retry' }> = {
-  no_key: { title: 'Ask needs a key from your model provider.', action: 'settings' },
-  bad_key: { title: 'Your provider refused the key.', action: 'settings' },
+  no_key: { title: 'Ask needs a key from your model provider, or your computer.', action: 'settings' },
+  bad_key: { title: 'The key or access code was refused.', action: 'settings' },
   offline: { title: 'The model cannot be reached. Check your connection.', action: 'retry' },
   refused: { title: 'The model declined to answer this.' },
   rate_limited: { title: 'Your provider is limiting requests. Try again shortly.', action: 'retry' },
@@ -152,17 +152,18 @@ function Exchange({ turn, onRetry }: { turn: Turn; onRetry: () => void }) {
   );
 }
 
-function Hero({ model, hasKey }: { model: string; hasKey: boolean }) {
+function Hero({ settings, ready }: { settings: AiSettings; ready: boolean }) {
+  const source = settings.provider === 'computer' ? 'Claude Code on your computer' : settings.model;
   return (
     <View style={{ alignItems: 'center', gap: 8, paddingTop: 96, paddingHorizontal: 32 }}>
       <Icon sf="sparkles" md="auto_awesome" size={34} color={colors.tertiary} />
       <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>Ask your notes</Text>
       <Text style={{ fontSize: 15, lineHeight: 20, color: colors.secondary, textAlign: 'center' }}>
-        {hasKey
-          ? `Answers come from ${model}, which reads only the notes it needs.`
-          : 'Add a key from Anthropic or an OpenAI-compatible provider to start.'}
+        {ready
+          ? `Answers come from ${source}, which reads only the notes it needs.`
+          : 'Add a key from Anthropic or an OpenAI-compatible provider, or connect to your computer, to start.'}
       </Text>
-      {hasKey ? null : (
+      {ready ? null : (
         <Pressable
           accessibilityRole="button"
           onPress={() => router.navigate('/settings')}
@@ -186,6 +187,7 @@ function Hero({ model, hasKey }: { model: string; hasKey: boolean }) {
 export default function Ask() {
   const insets = useSafeAreaInsets();
   const { settings, hasKey } = useAi();
+  const ready = hasKey && baseOf(settings) !== '';
   const [question, setQuestion] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const running = turns.at(-1)?.state === 'running';
@@ -244,9 +246,10 @@ export default function Ask() {
   // Room behind the keyboard so the last answer can scroll clear of it. Set once the keyboard
   // has settled: it sits under the keys, so it has nothing to animate.
   const [keyboardSpace, setKeyboardSpace] = useState(0);
+  const empty = turns.length === 0;
   const settled = (height: number) => {
     setKeyboardSpace(Math.max(0, height - rest));
-    if (height > 0) requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: true }));
+    if (height > 0 && !empty) requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: true }));
   };
   useKeyboardHandler(
     {
@@ -255,12 +258,11 @@ export default function Ask() {
         scheduleOnRN(settled, e.height);
       },
     },
-    [rest],
+    [rest, empty],
   );
 
   const page = useColorScheme() === 'dark' ? '0, 0, 0' : '255, 255, 255';
   const canSend = question.trim() !== '' && !running;
-  const empty = turns.length === 0;
 
   return (
     <>
@@ -286,11 +288,11 @@ export default function Ask() {
         contentContainerStyle={{ paddingHorizontal: PAGE_PAD_X, paddingTop: 8, paddingBottom: FOOTER_CLEARANCE, gap: 24 }}
       >
         {empty ? (
-          <Hero model={settings.model} hasKey={hasKey} />
+          <Hero settings={settings} ready={ready} />
         ) : (
           turns.map((t) => <Exchange key={t.id} turn={t} onRetry={() => void run(t.question)} />)
         )}
-        <View style={{ height: keyboardSpace }} />
+        {empty ? null : <View style={{ height: keyboardSpace }} />}
       </ScrollView>
       <Animated.View
         // In a tab the bottom inset already ends at the tab bar, so the composer rests one gap
@@ -308,7 +310,7 @@ export default function Ask() {
             experimental_backgroundImage: `linear-gradient(to bottom, rgba(${page}, 0) 0%, rgba(${page}, 0.8) 45%, rgba(${page}, 1) 100%)`,
           }}
         />
-        {empty && hasKey ? (
+        {empty && ready ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}

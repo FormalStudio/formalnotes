@@ -13,7 +13,7 @@ const SIZE = 88;
 export function ProfileHeader({ email, uri, detail }: { email: string; uri: string | null; detail: string }) {
   const [busy, setBusy] = useState(false);
   return (
-    <View style={{ alignItems: 'center', gap: 4, paddingVertical: 12 }}>
+    <View style={{ alignItems: 'center', gap: 4, paddingVertical: 12, paddingHorizontal: 16 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Change profile picture"
@@ -31,7 +31,12 @@ export function ProfileHeader({ email, uri, detail }: { email: string; uri: stri
           </View>
         )}
       </Pressable>
-      <Text selectable style={{ color: colors.text, fontSize: 17, fontWeight: '600' }}>
+      <Text
+        selectable
+        numberOfLines={1}
+        ellipsizeMode="middle"
+        style={{ alignSelf: 'stretch', textAlign: 'center', color: colors.text, fontSize: 17, fontWeight: '600' }}
+      >
         {email}
       </Text>
       <Text style={{ color: colors.secondary, fontSize: 13 }}>{detail}</Text>

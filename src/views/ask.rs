@@ -7,13 +7,14 @@ use std::time::Duration;
 
 use nd::prelude::*;
 
-use crate::actions::{OpenEntry, OpenSettings};
+use crate::actions::OpenEntry;
 use crate::ai::ask::{self, AskEvent, Piece};
 use crate::ai::chat::{AiError, Cancel, Message};
 use crate::ai::settings::connector;
 use crate::library::{EntryId, Library, NoteId, Store};
 use crate::nav::entry_key;
 use crate::settings::NotesSettings;
+use crate::settings::{ASSISTANT_TAB, GENERAL_TAB};
 
 pub const FIELD: &str = "ask-field";
 
@@ -230,7 +231,13 @@ impl Ask {
                     .items_start()
                     .child(text(error.line()).text_color(theme.text.primary))
                     .when(error.wants_settings(), |d| {
-                        d.child(button(format!("ask-settings-{id}"), "Open Settings").dispatch(OpenSettings))
+                        // The key is on the Assistant tab; the model and the address are in the form.
+                        let tab = if error.wants_key() { ASSISTANT_TAB } else { GENERAL_TAB };
+                        d.child(button(format!("ask-settings-{id}"), "Open Settings").on_click(
+                            move |_: &ClickEvent, _, cx| {
+                                crate::settings::open_tab(cx, tab);
+                            },
+                        ))
                     })
                     .into_any_element(),
             ),

@@ -102,6 +102,32 @@ describe('ask', () => {
     expect(events.at(-1)).toEqual({ type: 'text', text: 'In Packing list.' });
   });
 
+  test('computer: asks the address the user typed, with the access code as the key', async () => {
+    const lib = library();
+    const seen: { url: string; key: string }[] = [];
+    const settings = { ...DEFAULTS.computer, baseUrl: '192.168.1.20:47600/' };
+    const events: AskEvent[] = [];
+    await ask('What do I pack?', {
+      settings,
+      key: 'the-code',
+      lib,
+      emit: (e) => events.push(e),
+      fetch: async (url, init) => {
+        seen.push({ url, key: (init.headers as Record<string, string>)['x-api-key'] });
+        return sse([
+          { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'A passport.' } },
+          { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+        ]);
+      },
+    });
+    expect(seen).toEqual([{ url: 'http://192.168.1.20:47600/v1/messages', key: 'the-code' }]);
+    expect(events).toEqual([{ type: 'text', text: 'A passport.' }]);
+    await expect(
+      ask('x', { settings: DEFAULTS.computer, key: 'the-code', lib, emit: () => {}, fetch: async () => new Response() }),
+    ).rejects.toMatchObject({ kind: 'no_key' });
+  });
+
   test('errors name what went wrong', async () => {
     const lib = library();
     const base = { settings: DEFAULTS.anthropic, lib, emit: () => {} };
