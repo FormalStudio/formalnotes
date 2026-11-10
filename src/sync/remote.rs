@@ -278,6 +278,27 @@ fn api<T>(status: u16, code: &str) -> Result<T> {
     Err(RemoteError::Api { status, code: code.to_owned(), message: String::new() })
 }
 
+/// The account password is `base64url(authKey)`: exactly 43 characters.
+fn check_password(password: &str) -> Result<()> {
+    match password.chars().count() {
+        n if n < 43 => api(400, "password_too_short"),
+        n if n > 43 => api(400, "password_too_long"),
+        _ => Ok(()),
+    }
+}
+
+fn is_id(id: &str) -> bool {
+    let parts: Vec<&str> = id.split('-').collect();
+    let lens = [8, 4, 4, 4, 12];
+    parts.len() == 5
+        && parts
+            .iter()
+            .zip(lens)
+            .all(|(p, n)| p.len() == n && p.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        && parts[2].starts_with('4')
+        && matches!(parts[3].as_bytes().first(), Some(b'8' | b'9' | b'a' | b'b'))
+}
+
 fn blob_len(blob: &Option<String>) -> u64 {
     blob.as_deref().and_then(|b| super::crypto::from_base64(b).ok()).map_or(0, |b| b.len() as u64)
 }
@@ -294,6 +315,15 @@ impl Fake {
     /// The next `n` pushes are applied, but their answers never arrive.
     pub fn lose_answers(&self, n: u32) {
         self.with(|s| s.lose_answers = n);
+    }
+
+    /// Drops every object of the account but keeps its counter: the server lost its data.
+    pub fn forget_objects(&self, email: &str) {
+        self.with(|s| {
+            if let Some(u) = s.users.get_mut(email) {
+                u.objects.clear();
+            }
+        });
     }
 
     pub fn user_exists(&self, email: &str) -> bool {
@@ -345,9 +375,10 @@ impl Remote for Fake {
             if s.offline {
                 return Err(RemoteError::Offline("fake server offline".into()));
             }
+            check_password(password)?;
             let email = email.trim().to_lowercase();
             if s.users.contains_key(&email) {
-                return api(422, "USER_ALREADY_EXISTS");
+                return api(422, "user_already_exists_use_another_email");
             }
             s.users.insert(email.clone(), FakeUser { password: password.to_owned(), ..FakeUser::default() });
             Ok(Self::open_session(s, &email))
@@ -362,7 +393,7 @@ impl Remote for Fake {
             let email = email.trim().to_lowercase();
             match s.users.get(&email) {
                 Some(u) if u.password == password => Ok(Self::open_session(s, &email)),
-                _ => api(401, "INVALID_EMAIL_OR_PASSWORD"),
+                _ => Err(RemoteError::Unauthorized),
             }
         })
     }
@@ -396,6 +427,9 @@ impl Remote for Fake {
     }
 
     fn change_password(&self, token: &str, current: &str, new: &str, wrapped: &str) -> Result<()> {
+        if current.chars().count() != 43 || new.chars().count() != 43 {
+            return api(400, "bad_request");
+        }
         let email = self.user(token, |u| {
             if u.password != current {
                 return api(403, "wrong_password");
@@ -431,16 +465,26 @@ impl Remote for Fake {
     }
 
     fn push(&self, token: &str, changes: &[Push]) -> Result<Vec<Outcome>> {
-        if changes.len() > PUSH_LIMIT {
+        if changes.len() > PUSH_LIMIT || changes.iter().any(|c| !is_id(&c.id) || (!c.deleted && c.blob.is_none())) {
             return api(400, "bad_request");
         }
-        let results = self.user(token, |u| {
-            if changes.iter().any(|c| blob_len(&c.blob) > BLOB_LIMIT as u64) {
-                return api(413, "too_large");
+        for change in changes.iter().filter(|c| !c.deleted) {
+            match change.blob.as_deref().map(super::crypto::from_base64) {
+                Some(Ok(b)) if b.first() == Some(&1) => {
+                    if b.len() > BLOB_LIMIT {
+                        return api(413, "too_large");
+                    }
+                }
+                _ => return api(400, "bad_request"),
             }
+        }
+        let results = self.user(token, |u| {
+            // Applied to a copy: a quota failure keeps nothing, conflicts are answered one by one.
+            let mut objects = u.objects.clone();
+            let mut counter = u.counter;
             let mut out = Vec::new();
             for change in changes {
-                let current = u.objects.get(&change.id);
+                let current = objects.get(&change.id);
                 let taken = match current {
                     Some(c) => c.seq == change.base,
                     None => change.base == 0,
@@ -451,27 +495,21 @@ impl Remote for Fake {
                     out.push(Outcome::Conflict { id: c.id, seq: c.seq, deleted: c.deleted, blob: c.blob });
                     continue;
                 }
-                let was_live = current.is_some_and(|c| !c.deleted);
-                let (mut live, mut bytes) = u
-                    .objects
-                    .values()
-                    .filter(|c| !c.deleted)
-                    .fold((0u64, 0u64), |(n, b), c| (n + 1, b + blob_len(&c.blob)));
-                if was_live {
-                    live -= 1;
-                    bytes -= current.map_or(0, |c| blob_len(&c.blob));
-                }
-                if !change.deleted && (live + 1 > LIVE_OBJECT_LIMIT || bytes + blob_len(&change.blob) > BYTE_LIMIT) {
+                counter += 1;
+                let blob = if change.deleted { None } else { change.blob.clone() };
+                objects.insert(
+                    change.id.clone(),
+                    Change { id: change.id.clone(), seq: counter, deleted: change.deleted, blob },
+                );
+                out.push(Outcome::Ok { id: change.id.clone(), seq: counter });
+                let live = objects.values().filter(|c| !c.deleted);
+                let (n, bytes) = live.fold((0u64, 0u64), |(n, b), c| (n + 1, b + blob_len(&c.blob)));
+                if (!change.deleted && n > LIVE_OBJECT_LIMIT) || bytes > BYTE_LIMIT {
                     return api(403, "quota");
                 }
-                u.counter += 1;
-                let blob = if change.deleted { None } else { change.blob.clone() };
-                u.objects.insert(
-                    change.id.clone(),
-                    Change { id: change.id.clone(), seq: u.counter, deleted: change.deleted, blob },
-                );
-                out.push(Outcome::Ok { id: change.id.clone(), seq: u.counter });
             }
+            u.objects = objects;
+            u.counter = counter;
             Ok(out)
         })?;
         let lost = self.with(|s| {

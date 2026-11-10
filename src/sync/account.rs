@@ -86,8 +86,8 @@ impl From<RemoteError> for AccountError {
     fn from(e: RemoteError) -> Self {
         match e.code() {
             Some("wrong_password") => AccountError::WrongPassword,
-            Some("INVALID_EMAIL_OR_PASSWORD") => AccountError::WrongCredentials,
-            Some(code) if code.starts_with("USER_ALREADY_EXISTS") => AccountError::Exists,
+            Some("invalid_email_or_password") => AccountError::WrongCredentials,
+            Some(code) if code.starts_with("user_already_exists") => AccountError::Exists,
             _ => AccountError::Remote(e),
         }
     }

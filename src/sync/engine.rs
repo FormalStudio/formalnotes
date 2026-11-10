@@ -551,7 +551,21 @@ impl Engine {
         // What is about to be sent is on disk first, so a lost answer settles on the next pull.
         self.save()?;
         for batch in pushes.chunks(PUSH_LIMIT) {
-            let outcomes = self.remote.push(&self.token, batch)?;
+            let outcomes = match self.remote.push(&self.token, batch) {
+                Ok(outcomes) => outcomes,
+                Err(e) => {
+                    // A rejected request kept nothing; only a lost answer may have landed.
+                    if matches!(e, RemoteError::Api { .. }) {
+                        for push in batch {
+                            if let Some(t) = self.state.objects.get_mut(&push.id) {
+                                t.sent = None;
+                            }
+                        }
+                        self.save()?;
+                    }
+                    return Err(e.into());
+                }
+            };
             for outcome in outcomes {
                 match outcome {
                     Outcome::Ok { id, seq } => {
@@ -567,6 +581,15 @@ impl Engine {
                                 t.synced_path = sent.path;
                             }
                             None => t.seq = seq,
+                        }
+                    }
+                    Outcome::Conflict { id, seq: 0, deleted: true, blob: None } => {
+                        // The server never saw this id: it is created, not updated.
+                        let Some(t) = self.state.objects.get_mut(&id) else { continue };
+                        if t.sent.take().is_some_and(|s| s.deleted) {
+                            self.state.objects.remove(&id);
+                        } else {
+                            t.seq = 0;
                         }
                     }
                     Outcome::Conflict { id, seq, deleted, blob } => {

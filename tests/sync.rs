@@ -31,7 +31,7 @@ struct Account {
 
 fn account() -> Account {
     let fake = Fake::new();
-    let token = fake.sign_up("ada@example.com", "pw").unwrap();
+    let token = fake.sign_up("ada@example.com", &"p".repeat(43)).unwrap();
     Account { fake, token, vault: [9; 32] }
 }
 
@@ -520,6 +520,55 @@ fn the_service_signs_up_syncs_and_signs_out() {
     let seen: Vec<Event> = events.try_iter().collect();
     assert!(seen.contains(&Event::SignedOut), "{seen:?}");
     assert!(lib.path().join("Hello.md").exists(), "local notes stay");
+}
+
+#[test]
+fn the_fake_follows_the_servers_rules() {
+    use formalnotes::sync::remote::{Outcome, RemoteError};
+    let acc = account();
+    let blob = |id: &str| crypto::to_base64(&crypto::seal(&acc.vault, b"x", id.as_bytes()).unwrap());
+    let id = |n: u8| format!("00000000-0000-4000-8000-0000000000{n:02x}");
+    let push = |n: u8, base: u64| Push { id: id(n), base, deleted: false, blob: Some(blob(&id(n))) };
+
+    // An id the server never saw, with a base above 0.
+    let out = acc.fake.push(&acc.token, &[push(1, 5)]).unwrap();
+    assert_eq!(out, vec![Outcome::Conflict { id: id(1), seq: 0, deleted: true, blob: None }]);
+
+    // A malformed change rejects the whole request and keeps nothing.
+    let bad = Push { id: "not-an-id".into(), base: 0, deleted: false, blob: Some(blob("x")) };
+    let err = acc.fake.push(&acc.token, &[push(2, 0), bad]).unwrap_err();
+    assert_eq!(err.code(), Some("bad_request"));
+    assert_eq!(acc.fake.usage(&acc.token).unwrap().objects, 0);
+
+    // A blob over 1 MiB is `too_large`.
+    let huge = crypto::to_base64(&vec![1u8; 1024 * 1024 + 1]);
+    let big = Push { id: id(3), base: 0, deleted: false, blob: Some(huge) };
+    assert_eq!(acc.fake.push(&acc.token, &[push(2, 0), big]).unwrap_err().code(), Some("too_large"));
+    assert_eq!(acc.fake.usage(&acc.token).unwrap().objects, 0);
+
+    // The account password is exactly 43 characters.
+    assert_eq!(acc.fake.sign_up("b@example.com", "short").unwrap_err().code(), Some("password_too_short"));
+    assert_eq!(acc.fake.sign_up("b@example.com", &"p".repeat(44)).unwrap_err().code(), Some("password_too_long"));
+    let twice = acc.fake.sign_up("ada@example.com", &"p".repeat(43)).unwrap_err();
+    assert_eq!(twice.code(), Some("user_already_exists_use_another_email"));
+    assert!(matches!(acc.fake.sign_in("ada@example.com", &"q".repeat(43)), Err(RemoteError::Unauthorized)));
+    assert_eq!(acc.fake.delete_account(&acc.token, &"q".repeat(43)).unwrap_err().code(), Some("wrong_password"));
+}
+
+#[test]
+fn an_object_the_server_lost_is_created_again() {
+    let acc = account();
+    let mut a = acc.device();
+    a.write("Hello.md", "hi");
+    a.sync();
+    assert_eq!(acc.live(), 1);
+    acc.fake.forget_objects("ada@example.com");
+    a.write("Hello.md", "hi again");
+    a.sync();
+    assert_eq!(acc.live(), 1);
+    let mut b = acc.device();
+    b.sync();
+    assert_eq!(b.read("Hello.md").unwrap(), "hi again");
 }
 
 /// The real server: a throwaway account, two libraries standing in for two devices, deleted at
