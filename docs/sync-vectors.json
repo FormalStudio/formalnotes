@@ -1,0 +1,26 @@
+{
+  "kdf": {
+    "email": " Ada@Example.com ",
+    "password": "correct horse battery staple",
+    "iterations": 600000,
+    "salt": "formalnotes:v1:ada@example.com",
+    "masterKey": "d2c010da0928381bf43cd9e929fcd2b8587ad494044d02ff59ee834a106689f2",
+    "authKey": "474005b89c74358d8026a8bedb5208f1866ff3b900344c3acf64705ded44c60a",
+    "authPassword": "R0AFuJx0NY2AJqi-21II8YZv87kANEw6z2RwXe1Exgo",
+    "wrapKey": "f698a5374ca18a194f35de458be51e817d36bb6a69fa14634647f781fda38d06"
+  },
+  "vaultKey": {
+    "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "nonce": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "aad": "vault-key",
+    "wrappedVaultKey": "AaChoqOkpaanqKmqq10KCZXQx/CHd2NN5WGsjZXw850tPvTM//+SZuXtHLv2bLxoTy/dudhVvV1iBX3CZw=="
+  },
+  "object": {
+    "id": "0b0f1c2e-3d4a-4b5c-8d6e-7f8091a2b3c4",
+    "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "nonce": "b0b1b2b3b4b5b6b7b8b9babb",
+    "plaintext": "{\"v\":1,\"kind\":\"note\",\"path\":\"Journal/Slow start.md\",\"text\":\"---\\nmood: calm\\n---\\n# Slow start\\n\\nCoffee on the balcony, then café ☕.\\n\",\"created\":1794300000000,\"modified\":1794303600000}",
+    "paddedLength": 1024,
+    "blob": "AbCxsrO0tba3uLm6u+J3LInW/Jd9LJH5xu9nqqzrSCzwOQz/VCqmoMt+yJ1jdyVCVkyNytfSe9M+Xcv2m0AJNes5TyeIOahWEim2DaPchVHbboZGuXiwzwLwK88cGv7qkvsUGqrViAzxWS1T0T/OPTSosVNzfiF0/OaypaBv19v0HJ20Flhzn7xwLkxDL24OruGWBgA+Oy8KDnxDfuLJIbTpWXIqiMUQ7XnxzKTC4vHQHQo6VZl9KtcpZtGABWkkgqzdd4xlI3ux/aOpfn33hNDVJ2SrCBRM+SdADbXqCaZQfhYN5HMWYLXjFck8WiCpV7DRLkQTNaZtgWG6aLfqYSeGGXaH8NlyJreVZWI3X2AwjDQP52dr43ObhlFwZDj4P/iGmSJEnh3TMWm8EP/ybGKgXj0OmUlt67gIwiW4/60My3mfJL5qppJ0sGss1PrCDDW5XTtdF/8OdyqK82soPKhkabC90x88AD6G2iPQ6l/jNGw3+54FwSSbb89iyhslx53P9CflUUz73DB5JzvtmpHXYbkz1svWvnR8Qm87mqQbOzF+gDNjcpatocOimAX34M6biDhYMZNvcDA/Den6gT1GaY9lNM1m2OyXKcQ/qWdOVQ+32rF4P8S4H1qlSIyKNU7Eb2XDgEwVJxPozvQV+U5Dgd/su5vWEKXL4F9ZizZ1QnxGzJyog7p3cCuoUm2mftClSnylILnatdK74Oam4c7AUWWGNHRKkFbkDwK8RWrsgrqSwtuXzlzlHS7m7srEIazh+XKucdjng+SZnSeLil9wh2cmnrpZuKOU1bLhxPWeH9XLQl2EpMVxPDf0r8bEWidt86izMi27ueAKP0bByUKOIY4rqqMl3yhcuyUv3xoILpxqPlefJlqW0/Isb+JyHKXvyeq0AFKdODCvLWD/45AVlYO/72ep6TzsTZ53SK++6YZhT4TOuB+DFvjy2JkTY9PFgzNl4UCfsdDw9lndCvblBfGKhNSyPiN19GUD3oHkpWJaqJ/20WKFwC/BLIJvdxTfSQ1lGKi/ZetNzDb6DEDfrkUJgsPKT5MoKfXxgre3RkulL6VYllpLMd0dysARHPDrpO6iLurAhLkOmcabAkGipsT+PXIEXURfifma5EVBUjloKOLqfQaN/w+SEggIOctxUt4xkaKHyM7Q4Sa8Fk1LrVdY/WWEYnwScscoFwNx9E4rAGZ/Rm+MQ13Fe85kd1/OThXamMzn4ko+rhwir5GdcR20k157j3xbfOiaur/QecTFuY9wz/Lg9DwBWD3+WBpMzXSjpyPFHMs2y5Q6qCU5hlB7Rv2d+KkwyqnHRJCntKCGDJP1y9HoBT7zB6bYZyNSI+XzRC5MgrG7+EPNCUY30JL+qE0KJmu7uHcBaIRByrt+M6nH8LiH+7KY"
+  }
+}
