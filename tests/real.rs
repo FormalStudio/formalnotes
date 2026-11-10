@@ -8,8 +8,10 @@ use std::time::Duration;
 
 use nd_test::{AppHandle, LaunchOptions, expect, launch_app};
 
-/// The table's row height on AppKit, in points.
+/// The table's row height on AppKit, in points, and the blank row that keeps the first note
+/// clear of the column header.
 const ROW: f32 = 32.;
+const HEADER: f32 = 28.;
 
 fn shots() -> PathBuf {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/nd/shots");
@@ -25,11 +27,10 @@ fn tap(app: &AppHandle, test_id: &str) {
 }
 
 /// A real click on the title of the table's row `index`. AppKit reports every cell at the table's
-/// own origin, so the point is worked out from the table. Row 0 sits under the column header
-/// there, which is why `index` starts at 1.
+/// own origin, so the point is worked out from the table.
 fn tap_row(app: &AppHandle, index: usize) {
     let b = app.get_by_test_id("table").node().unwrap().bounds.unwrap();
-    app.mouse().click(b.origin.x + 100., b.origin.y + ROW * index as f32 + ROW / 2.).unwrap();
+    app.mouse().click(b.origin.x + 100., b.origin.y + HEADER + ROW * index as f32 + ROW / 2.).unwrap();
 }
 
 fn table_then_note(theme: &str) {
@@ -54,9 +55,9 @@ fn table_then_note(theme: &str) {
     expect(&app.get_by_test_id("table")).to_be_visible().unwrap();
     std::thread::sleep(Duration::from_millis(1500));
     app.screenshot(&shots().join(format!("table-{theme}.png")), None).unwrap();
-    eprintln!("SNAPSHOT\n{}", app.snapshot().unwrap());
+    std::fs::write(shots().join(format!("table-{theme}.txt")), app.snapshot().unwrap().to_string()).unwrap();
 
-    tap_row(&app, 1);
+    tap_row(&app, 0);
     expect(&app.get_by_test_id("note-back")).to_be_visible().unwrap();
     expect(&app.get_by_test_id("property-name:Status")).to_be_visible().unwrap();
     std::thread::sleep(Duration::from_millis(1000));

@@ -27,6 +27,8 @@ pub const ADD_ROW: &str = "table-add-row";
 const ADD_COLUMN: &str = "+add";
 const COLUMN_NAME: &str = "column-name";
 const ROW_HEIGHT: f32 = 32.;
+/// Height of the column header AppKit draws over the top of the list.
+const APPKIT_HEADER: f32 = 28.;
 const TITLE_WIDTH: f32 = 210.;
 const MODIFIED_WIDTH: f32 = 110.;
 const PLUS_WIDTH: f32 = 36.;
@@ -34,6 +36,8 @@ const PLUS_WIDTH: f32 = 36.;
 /// A row of the table: a note, or the row that adds one.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Row {
+    /// Blank space the height of AppKit's column header, which floats over the first rows.
+    Gap,
     Note(NoteId),
     Add,
 }
@@ -117,7 +121,7 @@ impl TableView {
             .into_iter()
             .filter_map(|r| match r {
                 Row::Note(id) => Some(id),
-                Row::Add => None,
+                Row::Gap | Row::Add => None,
             })
             .collect()
     }
@@ -152,13 +156,14 @@ impl TableView {
             notes.sort_by(|a, b| compare(a, b, &sort.column, kind, sort.descending));
         }
         let layout = self.layout;
-        let rows: Vec<(Row, u64)> = notes
-            .iter()
-            .map(|n| {
+        let gap = (nd::platform::target() == nd::platform::Target::MacOs).then_some((Row::Gap, 0));
+        let rows: Vec<(Row, u64)> = gap
+            .into_iter()
+            .chain(notes.iter().map(|n| {
                 let mut h = DefaultHasher::new();
                 (&*n.text, &n.title, n.modified, layout).hash(&mut h);
                 (Row::Note(n.id.clone()), h.finish())
-            })
+            }))
             .chain([(Row::Add, layout)])
             .collect();
         self.list.set_items_versioned(rows, cx);
@@ -247,6 +252,9 @@ impl TableView {
         let theme = cx.theme().clone();
         let cell = || div().h(px(ROW_HEIGHT)).px(theme.spacing.sm).flex().items_center().min_w_0();
         let Row::Note(id) = row else {
+            if row == Row::Gap {
+                return div().h(px(APPKIT_HEADER)).into_any_element();
+            }
             if !matches!(self.cols.get(col), Some(Col::Title)) {
                 return cell().into_any_element();
             }
@@ -455,7 +463,7 @@ impl TableView {
 
 impl Render for TableView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let count = self.list.len().saturating_sub(1);
+        let count = self.rows().len();
         let header = self.header(count, cx);
         let this = cx.weak_entity();
         let table = table(TABLE, &self.list, self.columns(cx), move |row, col, window, cx| {
@@ -465,7 +473,7 @@ impl Render for TableView {
         .selectable(|row, _| matches!(row, Row::Note(_)))
         .drag_rows(ENTRY_DRAG, |row| match row {
             Row::Note(id) => Some(note_key(id)),
-            Row::Add => None,
+            Row::Gap | Row::Add => None,
         })
         .on_activate(|e: &ActivateEvent<Row>, window, cx| {
             if let Row::Note(id) = &e.key {
