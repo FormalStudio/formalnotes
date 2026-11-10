@@ -5,7 +5,9 @@ pub mod demo;
 pub mod library;
 pub mod nav;
 mod pump;
+pub mod secrets;
 pub mod settings;
+pub mod sync;
 mod theme;
 pub mod views;
 
@@ -49,6 +51,7 @@ pub fn run() -> nd::Result<()> {
     pump::set_live();
     app().run(|cx| {
         actions::init(cx);
+        sync::init(cx);
         open(cx);
     })
 }
