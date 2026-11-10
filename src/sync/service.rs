@@ -26,11 +26,22 @@ pub enum Command {
     SyncNow,
     Activated,
     LocalChange,
-    SignIn { email: String, password: String },
-    SignUp { email: String, password: String },
+    SignIn {
+        email: String,
+        password: String,
+    },
+    SignUp {
+        email: String,
+        password: String,
+    },
     SignOut,
-    ChangePassword { current: String, new: String },
-    DeleteAccount { password: String },
+    ChangePassword {
+        current: String,
+        new: String,
+    },
+    DeleteAccount {
+        password: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,7 +59,10 @@ pub enum Status {
     /// Signed in, nothing has run yet.
     Waiting,
     Syncing,
-    Synced { at: Timestamp, problems: Vec<String> },
+    Synced {
+        at: Timestamp,
+        problems: Vec<String>,
+    },
     Offline,
     Failed(String),
 }
@@ -149,8 +163,10 @@ impl Service {
             match command {
                 Some(command) => self.handle(command),
                 None => {
-                    let local_only = self.change_at.is_some_and(|at| at <= Instant::now())
-                        && self.next_at.is_none_or(|at| at > Instant::now());
+                    // nd-allow(clock-in-ui): the sync thread's own schedule, not view code
+                    let now = Instant::now();
+                    let local_only =
+                        self.change_at.is_some_and(|at| at <= now) && self.next_at.is_none_or(|at| at > now);
                     self.sync(local_only);
                 }
             }
@@ -182,9 +198,9 @@ impl Service {
                     self.change_at = Some(self.backoff_until().map_or(at, |b| b.max(at)));
                 }
             }
-            Command::SignIn { email, password } => self.account(Task::SigningIn, |s| {
-                account::sign_in(&*s.remote, &*s.keys, &email, &password).map(Some)
-            }),
+            Command::SignIn { email, password } => {
+                self.account(Task::SigningIn, |s| account::sign_in(&*s.remote, &*s.keys, &email, &password).map(Some))
+            }
             Command::SignUp { email, password } => self.account(Task::CreatingAccount, |s| {
                 account::sign_up(&*s.remote, &*s.keys, &email, &password).map(Some)
             }),
@@ -193,7 +209,9 @@ impl Service {
                 None => Ok(None),
             }),
             Command::ChangePassword { current, new } => self.account(Task::ChangingPassword, |s| match &s.session {
-                Some(session) => account::change_password(&*s.remote, session, &current, &new).map(|()| s.session.clone()),
+                Some(session) => {
+                    account::change_password(&*s.remote, session, &current, &new).map(|()| s.session.clone())
+                }
                 None => Ok(None),
             }),
             Command::DeleteAccount { password } => self.account(Task::DeletingAccount, |s| match &s.session {
@@ -263,7 +281,14 @@ impl Service {
         let (session, root) = (self.session.as_ref()?, self.root.as_ref()?);
         if self.engine.as_ref().is_none_or(|e| e.root() != root.as_path()) {
             let file = state::file(&self.state_dir, &session.email, root);
-            match Engine::new(root.clone(), self.remote.clone(), session.token.clone(), session.vault, file, self.busy.clone()) {
+            match Engine::new(
+                root.clone(),
+                self.remote.clone(),
+                session.token.clone(),
+                session.vault,
+                file,
+                self.busy.clone(),
+            ) {
                 Ok(engine) => self.engine = Some(engine),
                 Err(e) => {
                     self.send(Event::Status(Status::Failed(format!("The sync state could not be read: {e}"))));

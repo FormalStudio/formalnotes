@@ -385,7 +385,14 @@ fn paths_from_the_server_stay_inside_the_library() {
     let mut a = acc.device();
     a.sync();
     let id = crypto::new_id().unwrap();
-    let evil = Payload { v: 1, kind: Kind::Note, path: "../escape.md".into(), text: Some("x".into()), created: 0, modified: 0 };
+    let evil = Payload {
+        v: 1,
+        kind: Kind::Note,
+        path: "../escape.md".into(),
+        text: Some("x".into()),
+        created: 0,
+        modified: 0,
+    };
     let blob = evil.seal(&acc.vault, &id).unwrap();
     acc.fake.push(&acc.token, &[Push { id, base: 0, deleted: false, blob: Some(blob) }]).unwrap();
     let report = a.engine.sync().unwrap();
@@ -498,7 +505,10 @@ fn the_service_signs_up_syncs_and_signs_out() {
     service.handle(Command::SignUp { email: "ada@example.com".into(), password: PASSWORD.into() });
     let seen: Vec<Event> = events.try_iter().collect();
     assert!(seen.contains(&Event::SignedIn("ada@example.com".into())), "{seen:?}");
-    assert!(seen.iter().any(|e| matches!(e, Event::Status(Status::Synced { problems, .. }) if problems.is_empty())), "{seen:?}");
+    assert!(
+        seen.iter().any(|e| matches!(e, Event::Status(Status::Synced { problems, .. }) if problems.is_empty())),
+        "{seen:?}"
+    );
     assert!(seen.iter().any(|e| matches!(e, Event::Usage(u) if u.objects == 1)), "{seen:?}");
 
     fake.set_offline(true);

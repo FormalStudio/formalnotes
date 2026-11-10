@@ -21,7 +21,11 @@ pub enum RemoteError {
     Offline(String),
     /// `401`: the session is gone; sign in again.
     Unauthorized,
-    Api { status: u16, code: String, message: String },
+    Api {
+        status: u16,
+        code: String,
+        message: String,
+    },
 }
 
 impl RemoteError {
@@ -167,7 +171,8 @@ impl Http {
             .limit(1 << 30)
             .read_to_string()
             .map_err(|e| RemoteError::Offline(e.to_string()))?;
-        let value: Value = if text.trim().is_empty() { Value::Null } else { serde_json::from_str(&text).unwrap_or(Value::Null) };
+        let value: Value =
+            if text.trim().is_empty() { Value::Null } else { serde_json::from_str(&text).unwrap_or(Value::Null) };
         match status {
             200..=299 => Ok((status, token, value)),
             401 => Err(RemoteError::Unauthorized),
@@ -441,12 +446,17 @@ impl Remote for Fake {
                     None => change.base == 0,
                 };
                 if !taken {
-                    let c = current.cloned().unwrap_or(Change { id: change.id.clone(), seq: 0, deleted: true, blob: None });
+                    let c =
+                        current.cloned().unwrap_or(Change { id: change.id.clone(), seq: 0, deleted: true, blob: None });
                     out.push(Outcome::Conflict { id: c.id, seq: c.seq, deleted: c.deleted, blob: c.blob });
                     continue;
                 }
                 let was_live = current.is_some_and(|c| !c.deleted);
-                let (mut live, mut bytes) = u.objects.values().filter(|c| !c.deleted).fold((0u64, 0u64), |(n, b), c| (n + 1, b + blob_len(&c.blob)));
+                let (mut live, mut bytes) = u
+                    .objects
+                    .values()
+                    .filter(|c| !c.deleted)
+                    .fold((0u64, 0u64), |(n, b), c| (n + 1, b + blob_len(&c.blob)));
                 if was_live {
                     live -= 1;
                     bytes -= current.map_or(0, |c| blob_len(&c.blob));
@@ -456,7 +466,10 @@ impl Remote for Fake {
                 }
                 u.counter += 1;
                 let blob = if change.deleted { None } else { change.blob.clone() };
-                u.objects.insert(change.id.clone(), Change { id: change.id.clone(), seq: u.counter, deleted: change.deleted, blob });
+                u.objects.insert(
+                    change.id.clone(),
+                    Change { id: change.id.clone(), seq: u.counter, deleted: change.deleted, blob },
+                );
                 out.push(Outcome::Ok { id: change.id.clone(), seq: u.counter });
             }
             Ok(out)

@@ -80,7 +80,14 @@ enum Intent {
 }
 
 impl Engine {
-    pub fn new(root: PathBuf, remote: Arc<dyn Remote>, token: String, vault: Key, state_path: PathBuf, busy: Busy) -> io::Result<Self> {
+    pub fn new(
+        root: PathBuf,
+        remote: Arc<dyn Remote>,
+        token: String,
+        vault: Key,
+        state_path: PathBuf,
+        busy: Busy,
+    ) -> io::Result<Self> {
         let state = State::load(&state_path)?;
         Ok(Self { root: Root::new(root), remote, token, vault, state, state_path, busy, page: PULL_LIMIT })
     }
@@ -401,8 +408,13 @@ impl Engine {
         let tracked_paths: HashSet<String> = self.state.objects.values().map(|t| t.path.clone()).collect();
         let mut untracked: BTreeMap<String, Entry> =
             scan.iter().filter(|(p, _)| !tracked_paths.contains(*p)).map(|(p, e)| (p.clone(), e.clone())).collect();
-        let mut missing: Vec<String> =
-            self.state.objects.iter().filter(|(_, t)| !t.path.is_empty() && !present(t)).map(|(id, _)| id.clone()).collect();
+        let mut missing: Vec<String> = self
+            .state
+            .objects
+            .iter()
+            .filter(|(_, t)| !t.path.is_empty() && !present(t))
+            .map(|(id, _)| id.clone())
+            .collect();
         missing.sort_by_key(|id| self.state.objects.get(id).map_or(0, |t| t.path.len()));
 
         for id in &missing {
@@ -424,7 +436,8 @@ impl Engine {
             let name = t.path.rsplit('/').next().unwrap_or_default().to_owned();
             let candidates: Vec<&String> =
                 untracked.iter().filter(|(_, e)| e.kind == t.kind && e.hash == t.hash).map(|(p, _)| p).collect();
-            let same_name: Vec<&String> = candidates.iter().copied().filter(|p| p.rsplit('/').next() == Some(&name)).collect();
+            let same_name: Vec<&String> =
+                candidates.iter().copied().filter(|p| p.rsplit('/').next() == Some(&name)).collect();
             let to = match (same_name.as_slice(), candidates.as_slice()) {
                 ([one], _) | ([], [one]) => Some((*one).clone()),
                 _ => None,
@@ -441,7 +454,9 @@ impl Engine {
         let mut deletes = Vec::new();
         for (id, t) in &self.state.objects {
             match (!t.path.is_empty()).then(|| scan.get(&t.path)).flatten().filter(|e| e.kind == t.kind) {
-                Some(e) if e.hash != t.hash || t.path != t.synced_path => intents.push(Intent::Update(id.clone(), e.clone())),
+                Some(e) if e.hash != t.hash || t.path != t.synced_path => {
+                    intents.push(Intent::Update(id.clone(), e.clone()))
+                }
                 Some(_) => {}
                 None => deletes.push((t.path.clone(), id.clone())),
             }
@@ -475,9 +490,11 @@ impl Engine {
         let fits: Vec<&String> = folders()
             .filter(|g| {
                 children.iter().any(|c| {
-                    rebase(&c.path, from, g)
-                        .and_then(|moved| scan.get(&moved))
-                        .is_some_and(|e| e.kind == c.kind && e.hash == c.hash && untracked.contains_key(&rebase(&c.path, from, g).unwrap_or_default()))
+                    rebase(&c.path, from, g).and_then(|moved| scan.get(&moved)).is_some_and(|e| {
+                        e.kind == c.kind
+                            && e.hash == c.hash
+                            && untracked.contains_key(&rebase(&c.path, from, g).unwrap_or_default())
+                    })
                 })
             })
             .collect();

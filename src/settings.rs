@@ -136,20 +136,61 @@ pub fn set<V: Serialize>(cx: &mut App, key: &str, value: &V) {
     }
 }
 
-/// The Settings window: the settings form, applied as it changes, as Mac settings windows are.
-pub struct SettingsWindow;
+pub const GENERAL_TAB: &str = "general";
+pub const ACCOUNT_TAB: &str = "account";
+
+/// The Settings window: the settings form, applied as it changes, as Mac settings windows are,
+/// and the sync account.
+pub struct SettingsWindow {
+    tab: SharedString,
+    account: Entity<crate::views::account::AccountPane>,
+}
+
+impl SettingsWindow {
+    pub fn select(&mut self, tab: &str, cx: &mut Context<Self>) {
+        self.tab = SharedString::from(tab.to_owned());
+        cx.notify();
+    }
+}
 
 impl Render for SettingsWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
+        let tabs = toolbar()
+            .tab(GENERAL_TAB, "General", Icon::Settings)
+            .tab(ACCOUNT_TAB, "Account", Icon::User)
+            .selected_tab(self.tab.clone())
+            .on_tab(cx.listener(|this, e: &TabSelected, _, cx| this.select(&e.id, cx)));
+        let body = if self.tab.as_ref() == ACCOUNT_TAB {
+            div().size_full().p(theme.spacing.lg).child(self.account.clone())
+        } else {
+            div().size_full().p(theme.spacing.lg).child(settings_form::<NotesSettings>())
+        };
+        div().size_full().child(tabs).child(body)
     }
 }
 
 /// Opens the Settings window, or brings the open one forward.
 pub fn open_window(cx: &mut App) -> Option<WindowHandle<SettingsWindow>> {
-    open_settings(cx, |_, cx| cx.new(|_| SettingsWindow))
+    open_tab(cx, GENERAL_TAB)
 }
+
+/// Opens the Settings window on `tab`, or brings the open one forward on it.
+pub fn open_tab(cx: &mut App, tab: &str) -> Option<WindowHandle<SettingsWindow>> {
+    if let Some(OpenWindow(open)) = cx.try_global::<OpenWindow>() {
+        let _ = open.clone().update(cx, |this, cx| this.select(tab, cx));
+    }
+    let tab = SharedString::from(tab.to_owned());
+    let handle = open_settings(cx, move |window, cx| {
+        let account = cx.new(|cx| crate::views::account::AccountPane::new(window, cx));
+        cx.new(|_| SettingsWindow { tab, account })
+    })?;
+    cx.set_global(OpenWindow(handle.root().downgrade()));
+    Some(handle)
+}
+
+/// The Settings window once it has opened, so a second request can switch its tab.
+struct OpenWindow(WeakEntity<SettingsWindow>);
 
 #[cfg(test)]
 mod tests {

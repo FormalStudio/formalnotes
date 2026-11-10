@@ -26,6 +26,11 @@ use service::{Command, Event, Handle};
 /// What the UI knows of the account and the sync, delivered from the sync thread.
 pub struct SyncModel {
     handle: Option<Handle>,
+    pub view: SyncView,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SyncView {
     pub email: Option<String>,
     pub usage: Option<Usage>,
     pub status: Status,
@@ -40,25 +45,27 @@ struct Global(Entity<SyncModel>);
 impl SyncModel {
     /// A model with no sync thread behind it: tests and the appearance audit.
     pub fn idle() -> Self {
-        Self { handle: None, email: None, usage: None, status: Status::SignedOut, task: None, failure: None }
+        let view = SyncView { email: None, usage: None, status: Status::SignedOut, task: None, failure: None };
+        Self { handle: None, view }
     }
 
     fn handle_event(&mut self, event: Event) {
+        let view = &mut self.view;
         match event {
-            Event::SignedIn(email) => self.email = Some(email),
+            Event::SignedIn(email) => view.email = Some(email),
             Event::SignedOut => {
-                self.email = None;
-                self.usage = None;
+                view.email = None;
+                view.usage = None;
             }
-            Event::Usage(usage) => self.usage = Some(usage),
-            Event::Status(status) => self.status = status,
+            Event::Usage(usage) => view.usage = Some(usage),
+            Event::Status(status) => view.status = status,
             Event::Working(task) => {
-                self.task = Some(task);
-                self.failure = None;
+                view.task = Some(task);
+                view.failure = None;
             }
             Event::Finished(task, failure) => {
-                self.task = None;
-                self.failure = failure.map(|f| (task, f));
+                view.task = None;
+                view.failure = failure.map(|f| (task, f));
             }
         }
     }
@@ -95,9 +102,9 @@ impl SyncModel {
 
     /// Shows a state without a sync thread: the appearance audit and the screenshots.
     pub fn preview(&mut self, email: Option<String>, usage: Option<Usage>, status: Status) {
-        self.email = email;
-        self.usage = usage;
-        self.status = status;
+        self.view.email = email;
+        self.view.usage = usage;
+        self.view.status = status;
     }
 }
 

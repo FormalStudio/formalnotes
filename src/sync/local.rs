@@ -178,7 +178,8 @@ pub fn rename(root: &Root, from: &str, to: &str, kind: Kind) -> io::Result<()> {
 pub fn is_empty_folder(root: &Root, path: &str) -> bool {
     let Ok(dir) = checked(root, path, Kind::Folder) else { return false };
     fs::read_dir(dir).is_ok_and(|mut entries| {
-        entries.all(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with('.') && e.file_name() != FOLDER_FILE))
+        entries
+            .all(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with('.') && e.file_name() != FOLDER_FILE))
     })
 }
 
